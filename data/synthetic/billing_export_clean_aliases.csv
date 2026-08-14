@@ -1,0 +1,4 @@
+Billing Record ID,Patient Number,Patient,DOB,Rx Number,NDC Number,Drug Description,Date Filled,Plan,BIN,Qty Dispensed,Days Supply,Refills Left,Store Number
+BE-001,SP-001,Talia Fiction,1981-01-01,SRX-001,00000001001,Juniper Tablets,2026-07-02,Example Benefit,001234,30,30,2,SYN-01
+BE-002,SP-002,Uma Sample,1979-04-03,SRX-002,00000001002,Kestrel Capsules,2026-07-03,Sample Health,005678,20,10,1,SYN-01
+

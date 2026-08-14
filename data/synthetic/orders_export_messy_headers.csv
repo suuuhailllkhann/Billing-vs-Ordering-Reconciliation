@@ -1,0 +1,4 @@
+Purchase Order ID, PRODUCT-NDC ,Medication Name,Date-Ordered,ORDER QUANTITY,Batch Number
+OE-001,00000001001,Juniper Tablets,2026-07-02,30,SYN-BATCH
+OE-002,00000001003,River Capsules,2026-07-08,40,SYN-BATCH
+

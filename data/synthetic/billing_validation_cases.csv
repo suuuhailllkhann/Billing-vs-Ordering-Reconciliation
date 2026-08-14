@@ -1,0 +1,6 @@
+billing_id,patient_id,patient_name,date_of_birth,prescription_id,ndc,drug_name,billing_date,insurance_name,bin_number,quantity_billed,days_supply,refills_remaining
+VB-001,PT-101,Quinn Fiction,1982-02-02,RX-101,00000000101,Fable Tablets,2026-07-01,Fictional Health,300003,10,30,1
+VB-001,PT-101,Quinn Fiction,1982-02-02,RX-101,00000000101,Fable Tablets,2026-07-01,Fictional Health,300003,10,30,1
+VB-002,PT-102,Rhea Example,not-a-date,RX-102,00000000102,Glimmer Capsules,2026-07-02,Fictional Health,300003,invalid,30,0
+VB-003,,Sol Sample,1970-04-05,RX-103,,Harbor Tablets,2026-07-03,Fictional Health,300003,-5,-1,-1
+

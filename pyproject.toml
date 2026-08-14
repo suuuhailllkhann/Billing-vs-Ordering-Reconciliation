@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pharmacy-reconciliation"
+version = "0.1.0"
+description = "Local billing and ordering reconciliation using synthetic development data."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "pandas>=2.2,<3.0",
+    "openpyxl>=3.1,<4.0",
+    "PySide6>=6.7,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pandas-stubs>=2.2,<3.0",
+    "pyright>=1.1.390,<2.0",
+    "pytest>=8.0,<9.0",
+    "ruff>=0.9,<1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["src", "scripts", "app.py", "main_window.py"]
+exclude = [".venv", "build", "dist"]
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
+reportMissingTypeStubs = false

@@ -1,0 +1,2 @@
+Billing Record ID,Patient Number,Rx Number,NDC Number,Drug Description,Date Filled,Plan,Date,Amount
+BR-001,SP-031,SRX-031,00000004001,Nova Tablets,2026-07-06,Example Benefit,2026-07-06,42

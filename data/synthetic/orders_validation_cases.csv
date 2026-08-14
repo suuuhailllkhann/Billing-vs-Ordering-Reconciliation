@@ -1,0 +1,6 @@
+order_id,ndc,drug_name,ordered_date,quantity_ordered
+VO-001,00000000101,Fable Tablets,2026-07-01,10
+VO-001,00000000101,Fable Tablets,2026-07-01,10
+VO-002,00000000102,Glimmer Capsules,bad-date,not-a-number
+VO-003,,Harbor Tablets,2026-07-03,-2
+

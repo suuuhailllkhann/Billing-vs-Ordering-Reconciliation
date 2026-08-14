@@ -1,0 +1,7 @@
+order_id,ndc,drug_name,ordered_date,quantity_ordered
+O-001,00000000001,Aurelia Tablets,2026-07-06,100
+O-002,00000000002,Borealis Capsules,2026-07-09,50
+O-003, 00000000003 , Citrine Solution ,2026-07-11,35
+O-004,00000000005,Ember Suspension,2026-07-18,40
+O-005,00000000001,Aurelia Tablets,2026-08-01,999
+

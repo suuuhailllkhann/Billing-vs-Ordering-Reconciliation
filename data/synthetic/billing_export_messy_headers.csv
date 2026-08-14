@@ -1,0 +1,3 @@
+ Billing Record ID ,PATIENT-NUMBER, Patient Full Name ,Patient-DOB,RX_NO, NDC-NUMBER ,MEDICATION DESCRIPTION,Fill-Date,Insurance Plan,RX-BIN,DISPENSED-QUANTITY,Supply Days,Remaining Refills,Internal Comment
+BM-001,SP-011,Vera Example,1985-06-07,SRX-011,00000002001,Lantern Tablets,2026-07-04,Fictional Coverage,000321,15,30,3,synthetic note
+

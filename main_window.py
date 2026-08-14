@@ -1,302 +1,412 @@
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel,
-    QFileDialog, QComboBox, QTableView, QToolBar
-)
-from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHeaderView
-import os
-from PySide6.QtGui import QTextDocument, QDesktopServices
-from PySide6.QtPrintSupport import QPrinter
-from PySide6.QtGui import QPageSize
-from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import QMessageBox
+"""PySide6 desktop client for the authoritative reconciliation backend."""
+
+from html import escape
+from pathlib import Path
 
 import pandas as pd
+from PySide6.QtCore import QDate, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QPageSize, QStandardItem, QStandardItemModel, QTextDocument
+from PySide6.QtPrintSupport import QPrinter
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDateEdit,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from data_processing import process_data
+from pharmacy_reconciliation.application.controller import ReconciliationController, WorkflowError
+from pharmacy_reconciliation.ingestion.loaders import UnsupportedFileTypeError
+from pharmacy_reconciliation.ingestion.mapping import ManualMappingError, MappingStatus
+from pharmacy_reconciliation.ingestion.schemas import BILLING_COLUMNS, ORDERING_COLUMNS
 
-
-# ---------------- TABLE MODEL ---------------- #
 
 class PandasTableModel(QStandardItemModel):
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, frame: pd.DataFrame):
         super().__init__()
-
-        self.setColumnCount(len(df.columns))
-        self.setHorizontalHeaderLabels(df.columns.tolist())
-
-        for row in df.itertuples(index=False):
+        self.setColumnCount(len(frame.columns))
+        self.setHorizontalHeaderLabels(frame.columns.tolist())
+        for row in frame.itertuples(index=False):
             items = []
-            for col_index, value in enumerate(row):
-                item = QStandardItem(str(value))
-                item.setTextAlignment(Qt.AlignCenter)
-
-                # Color ONLY status column
-                if df.columns[col_index] == "status":
-                    if value == "FAILED":
-                        item.setBackground(QColor("#feb2b2"))
-                    elif value == "PASSED":
-                        item.setBackground(QColor("#c6f6d5"))
-
+            for column_index, value in enumerate(row):
+                display = "" if pd.isna(value) else str(value)
+                item = QStandardItem(display)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if frame.columns[column_index] == "status":
+                    colors = {"MATCHED": "#c6f6d5", "SHORT": "#feb2b2", "EXTRA": "#fef3c7"}
+                    if value in colors:
+                        item.setBackground(QColor(colors[value]))
                 items.append(item)
-
             self.appendRow(items)
 
 
-# ---------------- MAIN WINDOW ---------------- #
+class ManualMappingDialog(QDialog):
+    """Human-confirmation dialog; all mapping decisions remain in the backend."""
+
+    def __init__(self, ingestion, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Resolve {ingestion.dataset_type.title()} Column Mapping")
+        self.resize(760, 420)
+        layout = QVBoxLayout(self)
+        explanation = QLabel(
+            "Select a canonical destination only when you recognize the source column. "
+            "Leave unrelated columns as Ignore. Ambiguous fields are never selected automatically."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        unresolved = [item for item in ingestion.mapping.columns if item.status in {
+            MappingStatus.AMBIGUOUS, MappingStatus.UNMAPPED,
+        }]
+        canonical = BILLING_COLUMNS if ingestion.dataset_type == "billing" else ORDERING_COLUMNS
+        self.table = QTableWidget(len(unresolved), 4)
+        self.table.setHorizontalHeaderLabels(["Source column", "Normalized", "Status", "Map to"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._selectors: list[tuple[str, QComboBox]] = []
+        for row, item in enumerate(unresolved):
+            self.table.setItem(row, 0, QTableWidgetItem(item.source_column))
+            self.table.setItem(row, 1, QTableWidgetItem(item.normalized_source_column))
+            self.table.setItem(row, 2, QTableWidgetItem(item.status.value))
+            selector = QComboBox()
+            selector.addItem("Ignore", None)
+            for field in canonical:
+                selector.addItem(field, field)
+            if item.candidates:
+                selector.setToolTip("Possible destination(s): " + ", ".join(item.candidates))
+            self.table.setCellWidget(row, 3, selector)
+            self._selectors.append((item.source_column, selector))
+        layout.addWidget(self.table)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def manual_mapping(self) -> dict[str, str]:
+        return {
+            source: selector.currentData()
+            for source, selector in self._selectors
+            if selector.currentData() is not None
+        }
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.setWindowTitle("Billing vs Ordering Dashboard")
-        self.resize(1200, 700)
-
-        # ---- DATA ----
-        self.billing_df = None
-        self.orders_df = None
-        self.master_df = None
-        self.filtered_df = None
-
-        # ---- CENTRAL WIDGET ----
+        self.resize(1350, 850)
+        self.controller = ReconciliationController()
+        self.billing_path: str | None = None
+        self.ordering_path: str | None = None
+        self.filtered_inventory = pd.DataFrame()
         central = QWidget()
         self.setCentralWidget(central)
-        main_layout = QVBoxLayout(central)
+        root = QVBoxLayout(central)
+        root.addWidget(self._build_file_section())
+        root.addWidget(self._build_period_section())
+        root.addWidget(self._build_results_section(), stretch=1)
+        self.statusBar().showMessage("Load billing and ordering exports to begin.")
 
-        # ---- BUTTONS ----
-        self.load_billing_btn = QPushButton("Load Billing CSV")
-        self.load_orders_btn = QPushButton("Load Orders CSV")
+    def _build_file_section(self) -> QWidget:
+        group = QGroupBox("1. Load and validate exports")
+        layout = QGridLayout(group)
+        self.load_billing_btn = QPushButton("Load Billing CSV/XLSX")
+        self.load_orders_btn = QPushButton("Load Ordering CSV/XLSX")
+        self.resolve_billing_btn = QPushButton("Resolve Billing Mapping")
+        self.resolve_orders_btn = QPushButton("Resolve Ordering Mapping")
+        self.resolve_billing_btn.setEnabled(False)
+        self.resolve_orders_btn.setEnabled(False)
+        self.load_billing_btn.clicked.connect(lambda: self._choose_file("billing"))
+        self.load_orders_btn.clicked.connect(lambda: self._choose_file("ordering"))
+        self.resolve_billing_btn.clicked.connect(lambda: self._resolve_mapping("billing"))
+        self.resolve_orders_btn.clicked.connect(lambda: self._resolve_mapping("ordering"))
+        self.billing_file_label = QLabel("No billing file selected")
+        self.ordering_file_label = QLabel("No ordering file selected")
+        self.billing_quality = QLabel("Not loaded")
+        self.ordering_quality = QLabel("Not loaded")
+        for label in (self.billing_file_label, self.ordering_file_label, self.billing_quality, self.ordering_quality):
+            label.setWordWrap(True)
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.load_billing_btn, 0, 0)
+        layout.addWidget(self.billing_file_label, 0, 1)
+        layout.addWidget(self.resolve_billing_btn, 0, 2)
+        layout.addWidget(self.billing_quality, 1, 0, 1, 3)
+        layout.addWidget(self.load_orders_btn, 2, 0)
+        layout.addWidget(self.ordering_file_label, 2, 1)
+        layout.addWidget(self.resolve_orders_btn, 2, 2)
+        layout.addWidget(self.ordering_quality, 3, 0, 1, 3)
+        return group
 
-        self.load_billing_btn.clicked.connect(self.load_billing)
-        self.load_orders_btn.clicked.connect(self.load_orders)
+    def _build_period_section(self) -> QWidget:
+        group = QGroupBox("2. Select reconciliation period")
+        layout = QHBoxLayout(group)
+        self.start_date = QDateEdit(QDate.currentDate().addMonths(-1))
+        self.end_date = QDateEdit(QDate.currentDate())
+        for widget in (self.start_date, self.end_date):
+            widget.setCalendarPopup(True)
+            widget.setDisplayFormat("yyyy-MM-dd")
+        self.run_btn = QPushButton("Run Reconciliation")
+        self.run_btn.setEnabled(False)
+        self.run_btn.clicked.connect(self._run_reconciliation)
+        self.export_btn = QPushButton("Export Current Inventory PDF")
+        self.export_btn.setEnabled(False)
+        self.export_btn.clicked.connect(self._export_to_pdf)
+        layout.addWidget(QLabel("Start (inclusive)"))
+        layout.addWidget(self.start_date)
+        layout.addWidget(QLabel("End (inclusive)"))
+        layout.addWidget(self.end_date)
+        layout.addWidget(self.run_btn)
+        layout.addWidget(self.export_btn)
+        layout.addStretch()
+        return group
 
-        main_layout.addWidget(self.load_billing_btn)
-        main_layout.addWidget(self.load_orders_btn)
+    def _new_table(self) -> QTableView:
+        table = QTableView()
+        table.setSortingEnabled(True)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        table.verticalHeader().setDefaultSectionSize(28)
+        return table
 
-        # ---- FILTERS ----
-        self.drug_filter = QComboBox()
-        self.insurance_filter = QComboBox()
-        self.bin_filter = QComboBox()
+    def _build_results_section(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Medication"))
+        self.medication_filter = QComboBox()
+        self.medication_filter.setMinimumWidth(320)
+        self.medication_filter.addItem("All medications", None)
+        self.medication_filter.currentIndexChanged.connect(self._apply_medication_filter)
+        self.patient_count_label = QLabel("Unique patients: —")
+        filter_row.addWidget(self.medication_filter)
+        filter_row.addWidget(self.patient_count_label)
+        filter_row.addStretch()
+        layout.addLayout(filter_row)
+        self.tabs = QTabWidget()
+        self.inventory_table = self._new_table()
+        self.insurance_table = self._new_table()
+        self.patient_summary_table = self._new_table()
+        self.patient_details_table = self._new_table()
+        self.tabs.addTab(self.inventory_table, "Inventory Reconciliation")
+        self.tabs.addTab(self.insurance_table, "Billing by Insurance / BIN")
+        patient_splitter = QSplitter(Qt.Orientation.Vertical)
+        patient_splitter.addWidget(self.patient_summary_table)
+        patient_splitter.addWidget(self.patient_details_table)
+        self.tabs.addTab(patient_splitter, "Patient Billing Details")
+        layout.addWidget(self.tabs)
+        return container
 
-        self.drug_filter.currentIndexChanged.connect(self.apply_filters)
-        self.insurance_filter.currentIndexChanged.connect(self.apply_filters)
-        self.bin_filter.currentIndexChanged.connect(self.apply_filters)
-
-        # ---- TOOLBAR ----
-        filter_toolbar = QToolBar("Filters")
-        filter_toolbar.setMovable(False)
-        filter_toolbar.setFloatable(False)
-
-        filter_toolbar.setStyleSheet("""
-            QToolBar { spacing: 8px; padding: 6px; }
-            QComboBox { min-width: 180px; padding: 4px; }
-        """)
-
-        filter_toolbar.addWidget(QLabel("Drug"))
-        filter_toolbar.addWidget(self.drug_filter)
-        filter_toolbar.addSeparator()
-
-        filter_toolbar.addWidget(QLabel("Insurance"))
-        filter_toolbar.addWidget(self.insurance_filter)
-        filter_toolbar.addSeparator()
-
-        filter_toolbar.addWidget(QLabel("BIN"))
-        filter_toolbar.addWidget(self.bin_filter)
-
-        self.addToolBar(filter_toolbar)
-
-        export_pdf_btn = QPushButton("Export PDF")
-        export_pdf_btn.clicked.connect(self.export_to_pdf)
-        filter_toolbar.addSeparator()
-        filter_toolbar.addWidget(export_pdf_btn)
-
-
-        # ---- TABLE ----
-        self.table = QTableView()
-        self.table.setSortingEnabled(True)
-        self.table.setAlternatingRowColors(True)
-
-        self.table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.table.verticalHeader().setDefaultSectionSize(28)
-
-        main_layout.addWidget(self.table)
-
-    # ---------------- LOADERS ---------------- #
-
-    def load_billing(self):
+    def _choose_file(self, dataset_type: str) -> None:
+        title = "Select Billing Export" if dataset_type == "billing" else "Select Ordering Export"
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select Billing CSV", "", "CSV Files (*.csv)"
+            self, title, "", "Supported Exports (*.csv *.xlsx);;CSV Files (*.csv);;Excel Files (*.xlsx)"
         )
         if path:
-            self.billing_df = pd.read_csv(path)
-            self.try_process()
+            self._load_file(dataset_type, path)
 
-    def load_orders(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select Orders CSV", "", "CSV Files (*.csv)"
+    def _load_file(self, dataset_type: str, path: str, manual_mapping=None) -> None:
+        try:
+            if dataset_type == "billing":
+                result = self.controller.load_billing(path, manual_mapping)
+                self.billing_path = path
+                self.billing_file_label.setText(Path(path).name)
+                self.billing_quality.setText(self._quality_text(result))
+            else:
+                result = self.controller.load_ordering(path, manual_mapping)
+                self.ordering_path = path
+                self.ordering_file_label.setText(Path(path).name)
+                self.ordering_quality.setText(self._quality_text(result))
+            self._update_mapping_buttons()
+            self._update_ready_state()
+        except (UnsupportedFileTypeError, ManualMappingError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "File could not be processed", str(exc))
+        except Exception:
+            QMessageBox.critical(
+                self, "File could not be processed",
+                "The export could not be read. Confirm that it is a valid CSV/XLSX file and is not open or damaged.",
+            )
+
+    def _quality_text(self, result) -> str:
+        report = result.report
+        ready = "READY" if result.ready_for_reconciliation else "NOT READY"
+        lines = [
+            f"{ready} • Rows: {report['rows_read']} • Valid: {report['valid_rows']} • "
+            f"Invalid: {report['invalid_rows']} • Warnings: {report['warning_count']}",
+            f"Columns: {report['columns_mapped']} mapped, {report['columns_ambiguous']} ambiguous, "
+            f"{report['columns_unmapped']} unmapped",
+        ]
+        if result.row_count == 0:
+            lines.append("The file contains headers but no data rows.")
+        if result.mapping.required_fields_missing:
+            lines.append("Missing required fields: " + ", ".join(result.mapping.required_fields_missing))
+        if result.mapping.conflicts:
+            lines.append("Mapping conflicts: " + " | ".join(conflict.message for conflict in result.mapping.conflicts))
+        if result.validation:
+            errors = [issue.message for issue in result.validation.issues if issue.severity == "error"]
+            warnings = [issue.message for issue in result.validation.issues if issue.severity == "warning"]
+            if errors:
+                lines.append("Data errors: " + " | ".join(errors))
+            if warnings:
+                lines.append("Warnings: " + " | ".join(warnings))
+        return "\n".join(lines)
+
+    def _update_mapping_buttons(self) -> None:
+        billing = self.controller.billing_ingestion
+        ordering = self.controller.ordering_ingestion
+        self.resolve_billing_btn.setEnabled(bool(
+            billing and (billing.mapping.conflicts or billing.mapping.required_fields_missing)
+        ))
+        self.resolve_orders_btn.setEnabled(bool(
+            ordering and (ordering.mapping.conflicts or ordering.mapping.required_fields_missing)
+        ))
+
+    def _resolve_mapping(self, dataset_type: str) -> None:
+        ingestion = self.controller.billing_ingestion if dataset_type == "billing" else self.controller.ordering_ingestion
+        path = self.billing_path if dataset_type == "billing" else self.ordering_path
+        if not ingestion or not path:
+            return
+        dialog = ManualMappingDialog(ingestion, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selections = dialog.manual_mapping()
+            if not selections:
+                QMessageBox.information(self, "No mappings selected", "No manual mappings were selected.")
+                return
+            self._load_file(dataset_type, path, selections)
+
+    def _update_ready_state(self) -> None:
+        ready = self.controller.inputs_ready
+        self.run_btn.setEnabled(ready)
+        if ready:
+            bounds = self.controller.available_date_bounds()
+            if bounds:
+                start, end = bounds
+                self.start_date.setDate(QDate(start.year, start.month, start.day))
+                self.end_date.setDate(QDate(end.year, end.month, end.day))
+            self.statusBar().showMessage("Both exports are ready. Select dates and run reconciliation.")
+        else:
+            self.statusBar().showMessage("Review file readiness before reconciliation.")
+
+    def _run_reconciliation(self) -> None:
+        start = self.start_date.date().toString("yyyy-MM-dd")
+        end = self.end_date.date().toString("yyyy-MM-dd")
+        if self.start_date.date() > self.end_date.date():
+            QMessageBox.warning(self, "Invalid date range", "Start date must be on or before end date.")
+            return
+        try:
+            result = self.controller.reconcile(start, end)
+        except (WorkflowError, ValueError) as exc:
+            QMessageBox.warning(self, "Cannot reconcile", str(exc))
+            return
+        except Exception:
+            QMessageBox.critical(
+                self, "Cannot reconcile", "Reconciliation could not be completed. Review both data-quality summaries."
+            )
+            return
+        if result.inventory.empty:
+            self._clear_results()
+            QMessageBox.information(
+                self, "No records in period", "No billing or ordering records fall inside the selected date range."
+            )
+            return
+        self._populate_medications(result.inventory)
+        self._apply_medication_filter()
+        self.export_btn.setEnabled(True)
+        self.statusBar().showMessage(
+            f"Reconciliation complete: {len(result.inventory)} medication(s), {start} through {end}."
         )
-        if path:
-            self.orders_df = pd.read_csv(path)
-            self.try_process()
 
-    # ---------------- PROCESS ---------------- #
+    def _populate_medications(self, inventory: pd.DataFrame) -> None:
+        self.medication_filter.blockSignals(True)
+        self.medication_filter.clear()
+        self.medication_filter.addItem("All medications", None)
+        for ndc, drug_name in inventory[["ndc", "drug_name"]].itertuples(index=False, name=None):
+            self.medication_filter.addItem(f"{drug_name} ({ndc})", (ndc, drug_name))
+        self.medication_filter.blockSignals(False)
 
-    def try_process(self):
-        if self.billing_df is None or self.orders_df is None:
+    def _filtered(self, frame: pd.DataFrame, medication) -> pd.DataFrame:
+        if medication is None or frame.empty:
+            return frame.copy()
+        ndc, drug_name = medication
+        return frame.loc[(frame["ndc"] == ndc) & (frame["drug_name"] == drug_name)].copy()
+
+    def _apply_medication_filter(self) -> None:
+        result = self.controller.dashboard_result
+        if not result:
             return
+        medication = self.medication_filter.currentData()
+        self.filtered_inventory = self._filtered(result.inventory, medication)
+        insurance = self._filtered(result.insurance, medication)
+        patient_summary = self._filtered(result.patient_summary, medication)
+        patient_details = self._filtered(result.patient_details, medication)
+        self._set_table(self.inventory_table, self.filtered_inventory)
+        self._set_table(self.insurance_table, insurance)
+        self._set_table(self.patient_summary_table, patient_summary)
+        self._set_table(self.patient_details_table, patient_details)
+        unique_count = int(patient_details["patient_id"].nunique()) if not patient_details.empty else 0
+        self.patient_count_label.setText(f"Unique patients: {unique_count}")
 
-        df = process_data(self.billing_df, self.orders_df)
-
-        if df is None or df.empty:
+    def _set_table(self, table: QTableView, frame: pd.DataFrame) -> None:
+        if frame.empty:
+            table.setModel(None)
             return
+        table.setModel(PandasTableModel(frame))
+        table.resizeColumnsToContents()
 
-        self.master_df = df.copy()
-        self.filtered_df = df.copy()
+    def _clear_results(self) -> None:
+        for table in (self.inventory_table, self.insurance_table, self.patient_summary_table, self.patient_details_table):
+            table.setModel(None)
+        self.filtered_inventory = pd.DataFrame()
+        self.medication_filter.clear()
+        self.medication_filter.addItem("All medications", None)
+        self.patient_count_label.setText("Unique patients: —")
+        self.export_btn.setEnabled(False)
 
-        self.update_filters()
-        self.update_table(self.filtered_df)
-
-    # ---------------- TABLE ---------------- #
-
-    def update_table(self, df):
-        if df is None or df.empty:
-            self.table.setModel(None)
+    def _export_to_pdf(self) -> None:
+        if self.filtered_inventory.empty:
+            QMessageBox.information(self, "Nothing to export", "Run reconciliation before exporting a report.")
             return
-
-        model = PandasTableModel(df)
-        self.table.setModel(model)
-        self.table.resizeColumnsToContents()
-
-    # ---------------- FILTERS ---------------- #
-
-    def update_filters(self):
-        if self.master_df is None or self.master_df.empty:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Inventory PDF", "billing_vs_orders.pdf", "PDF Files (*.pdf)"
+        )
+        if not path:
             return
-
-        self.drug_filter.blockSignals(True)
-        self.insurance_filter.blockSignals(True)
-        self.bin_filter.blockSignals(True)
-
-        self.drug_filter.clear()
-        self.insurance_filter.clear()
-        self.bin_filter.clear()
-
-        self.drug_filter.addItem("All")
-        self.insurance_filter.addItem("All")
-        self.bin_filter.addItem("All")
-
-        for d in sorted(self.master_df["drug_name"].dropna().unique()):
-            self.drug_filter.addItem(str(d))
-
-        for i in sorted(self.master_df["insurance_name"].dropna().unique()):
-            self.insurance_filter.addItem(str(i))
-
-        for b in sorted(self.master_df["bin_number"].dropna().astype(str).unique()):
-            self.bin_filter.addItem(b)
-
-        self.drug_filter.blockSignals(False)
-        self.insurance_filter.blockSignals(False)
-        self.bin_filter.blockSignals(False)
-
-    def apply_filters(self):
-        if self.master_df is None or self.master_df.empty:
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        frame = self.filtered_inventory
+        headers = "".join(f"<th>{escape(str(column))}</th>" for column in frame.columns)
+        rows = []
+        for row in frame.itertuples(index=False):
+            cells = "".join(f"<td>{escape('' if pd.isna(value) else str(value))}</td>" for value in row)
+            rows.append(f"<tr>{cells}</tr>")
+        html = (
+            "<html><head><style>body{font-family:Arial;font-size:9pt}"
+            "table{border-collapse:collapse;width:100%}th,td{border:1px solid #444;padding:4px;text-align:center}"
+            "th{background:#f0f0f0}</style></head><body><h2>Medication Inventory Reconciliation</h2>"
+            f"<table><tr>{headers}</tr>{''.join(rows)}</table></body></html>"
+        )
+        document = QTextDocument()
+        document.setHtml(html)
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(path)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        document.print_(printer)
+        if not Path(path).exists():
+            QMessageBox.critical(self, "PDF error", "The PDF could not be created.")
             return
-
-        df = self.master_df
-
-        drug = self.drug_filter.currentText()
-        ins = self.insurance_filter.currentText()
-        bin_ = self.bin_filter.currentText()
-
-        if drug != "All":
-            df = df[df["drug_name"] == drug]
-
-        if ins != "All":
-            df = df[df["insurance_name"] == ins]
-
-        if bin_ != "All":
-            df = df[df["bin_number"].astype(str) == bin_]
-
-        self.filtered_df = df
-        self.update_table(self.filtered_df)
-
-    def export_to_pdf(self):
-     if self.filtered_df is None or self.filtered_df.empty:
-        return
-
-     path, _ = QFileDialog.getSaveFileName(
-        self,
-        "Save PDF",
-        "billing_vs_orders.pdf",
-        "PDF Files (*.pdf)"
-    )
-
-     if not path:
-        return
-
-    # ✅ Ensure .pdf extension
-     if not path.lower().endswith(".pdf"):
-        path += ".pdf"
-
-     df = self.filtered_df
-
-    # ---------- Build HTML ----------
-     html = """
-    <html>
-    <head>
-    <style>
-        body { font-family: Arial; font-size: 10pt; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #444; padding: 4px; text-align: center; }
-        th { background-color: #f0f0f0; }
-        .ok { background-color: #c6f6d5; }
-        .short { background-color: #feb2b2; }
-    </style>
-    </head>
-    <body>
-    <h2>Billing vs Ordering Report</h2>
-    <table>
-        <tr>
-    """
-
-     for col in df.columns:
-        html += f"<th>{col}</th>"
-     html += "</tr>"
-
-     for _, row in df.iterrows():
-        html += "<tr>"
-        for col in df.columns:
-            val = row[col]
-            cls = ""
-            if col == "status":
-                cls = "ok" if val == "OK" else "short" if val == "SHORT" else ""
-            html += f'<td class="{cls}">{val}</td>'
-        html += "</tr>"
-
-     html += """
-    </table>
-    </body>
-    </html>
-    """
-
-    # ---------- Print ----------
-     doc = QTextDocument()
-     doc.setHtml(html)
-
-     printer = QPrinter(QPrinter.HighResolution)
-     printer.setOutputFormat(QPrinter.PdfFormat)
-     printer.setOutputFileName(path)
-     printer.setPageSize(QPageSize(QPageSize.A4))
-
-     doc.print_(printer)
-
-    # ✅ Confirm file exists
-     if not os.path.exists(path):
-        QMessageBox.critical(self, "PDF Error", "PDF was not created.")
-        return
-
-    # ✅ Open PDF automatically
-     QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-
-
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
