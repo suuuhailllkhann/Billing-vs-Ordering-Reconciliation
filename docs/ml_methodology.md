@@ -802,3 +802,34 @@ model change and must not be presented as real pharmacy or patient behavior.
 The Test set has already been consumed. Error-analysis findings are descriptive only
 and were not used for model selection, feature selection, hyperparameter tuning, or
 threshold adjustment.
+
+## Phase 3A local MLflow tracking
+
+MLflow was introduced after Phase 2 decisions were locked to preserve an auditable local
+record of the actual modeling history. It wraps established workflows and fixed
+configurations; it does not tune, select, or change models. Tracking uses the ignored
+repository-local `mlruns/` file store with `MLFLOW_ALLOW_FILE_STORE=true`. There is no
+database, container, cloud service, or remote server.
+
+Three experiments contain nine runs:
+
+- `pharmacy-reconciliation-baselines`: four baseline candidate runs.
+- `pharmacy-reconciliation-tuned`: four fixed Phase 2D tuned-history runs; selected
+  hyperparameters were refitted, but searches were not rerun.
+- `pharmacy-reconciliation-locked-final`: one locked full-feature Logistic Regression
+  run using Train-only fitting and threshold 0.50.
+
+Runs record safe configuration, feature count/version, target, synthetic-data status,
+seed, split boundaries, preprocessing, threshold, aggregate Train/Validation metrics,
+and confusion counts. Tuned runs also record the historical CV PR-AUC, search method,
+five time-series folds, `average_precision` scoring, trial count, and selected parameters.
+The final run records aggregate Validation, final-reporting Test, and seen/unseen Test
+summaries with `model_status=locked_final` and `test_consumed=true`. Test metrics were
+logged only after the model, feature set, fitting policy, and threshold had been locked.
+
+Only the final run logs a model artifact. It contains the Train-fitted imputation and
+missingness transformer, fixed 16-feature order, `StandardScaler`, and Logistic
+Regression. The feature-order contract is also logged as safe JSON. No raw datasets,
+patient identifiers or names, DOBs, prescription/Rx identifiers, NDC-level patient
+records, or row-level predictions are logged. Local artifacts are reproducible and are
+excluded from Git. No Phase 2 decision changed as a result of tracking.

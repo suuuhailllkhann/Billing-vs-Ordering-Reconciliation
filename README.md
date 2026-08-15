@@ -194,6 +194,20 @@ Regression (`C=0.01`, L2/SAGA) at threshold 0.50 and a Train-only final fitting 
 The single final Test evaluation is documented in `docs/ml_methodology.md`. Test is now
 consumed and must not be reused for model, threshold, feature, or hyperparameter choices.
 
+### Local MLflow tracking
+
+Install the ML dependencies, record the established history, and launch the local UI:
+
+```powershell
+python -m pip install -e ".[ml]"
+python scripts/track_mlflow_history.py
+mlflow ui --backend-store-uri ./mlruns
+```
+
+Open `http://127.0.0.1:5000` after starting the UI. The local store is `mlruns/`; it is
+ignored by Git and contains only aggregate configuration/metrics plus the locked final
+pipeline artifact. Running tracking does not rerun tuning or change locked decisions.
+
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
 out-of-period, whitespace-normalization, duplicate, invalid-quantity, malformed-date,
