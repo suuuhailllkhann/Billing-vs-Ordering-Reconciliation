@@ -276,6 +276,97 @@ variables and timing rates, the interval/day-supply variables, and the quantity/
 supply summaries previously identified as highly correlated. No feature is marked for
 removal from this analysis.
 
+### Post-Test standardized odds-ratio interpretation
+
+The locked Train-only Logistic Regression coefficients reproduced the earlier analysis
+within `5e-8`. Because `StandardScaler` is in the pipeline, each odds ratio is
+`exp(coefficient)` and represents the model's approximate multiplicative change in odds
+for a one-standard-deviation increase in that feature, holding other included features
+constant.
+
+| Feature | Standardized coefficient | Odds ratio | Direction |
+|---|---:|---:|---|
+| `previous_on_time_fill_rate` | 0.49936279 | 1.64767103 | increases predicted renewal odds |
+| `average_previous_timing_gap_days` | -0.13421066 | 0.87440584 | decreases predicted renewal odds |
+| `previous_fill_count` | 0.11387149 | 1.12060810 | increases predicted renewal odds |
+| `previous_early_fill_rate` | -0.06458892 | 0.93745276 | decreases predicted renewal odds |
+| `latest_refill_timing_gap_days` | -0.05895071 | 0.94275324 | decreases predicted renewal odds |
+| `refill_interval_std_available` | -0.05106063 | 0.95022106 | decreases predicted renewal odds |
+| `medication_prior_fill_count` | 0.04926908 | 1.05050298 | increases predicted renewal odds |
+| `average_previous_refill_interval_days` | -0.04845641 | 0.95269887 | decreases predicted renewal odds |
+| `medication_prior_average_days_supply` | 0.04333492 | 1.04428758 | increases predicted renewal odds |
+| `current_refill_number` | -0.01875323 | 0.98142152 | decreases predicted renewal odds |
+| `current_quantity_billed` | 0.01754541 | 1.01770024 | increases predicted renewal odds |
+| `medication_prior_average_quantity` | -0.01658121 | 0.98355550 | decreases predicted renewal odds |
+| `std_previous_refill_interval_days` | -0.01228752 | 0.98778766 | decreases predicted renewal odds |
+| `current_days_supply` | 0.00956247 | 1.00960834 | approximately neutral |
+| `days_since_previous_fill` | -0.00800432 | 0.99202762 | approximately neutral |
+| `prescription_age_days` | -0.00028218 | 0.99971786 | approximately neutral |
+
+The on-time rate has the largest conditional association: one standard deviation higher
+corresponds to 1.648 times the model-predicted renewal odds. One standard deviation
+higher average timing gap corresponds to 0.874 times the odds, while one standard
+deviation more previous fills corresponds to 1.121 times the odds. Early-fill rate,
+latest timing gap, and availability of interval variability correspond to odds ratios
+of 0.937, 0.943, and 0.950. The interval standard deviation (0.988) must be interpreted
+together with its availability indicator because the indicator distinguishes observed
+variability from Train-median imputation.
+
+These odds ratios describe the fitted model, not causal effects. They are standardized-
+feature odds ratios, and correlated predictors can share, suppress, or alter conditional
+effects. Small coefficients do not justify feature removal. No p-values or significance
+tests were calculated. The data are synthetic, so these relationships are not evidence
+about real patients or pharmacies. This post-Test interpretation did not change the
+locked model, features, preprocessing, hyperparameters, or threshold.
+
+### Validation permutation importance
+
+The locked full-feature Logistic Regression and preprocessing were fitted on Train only.
+Permutation importance was calculated on the 384 Validation observations—not Test—using
+scikit-learn `permutation_importance`, `average_precision` scoring, 30 repeats, seed
+`20260814`, and one worker. Importance is the mean decrease in Validation PR-AUC after
+permuting one final model input; standard deviation describes variation across repeats.
+
+| Rank | Feature | Mean PR-AUC decrease | Repeat std |
+|---:|---|---:|---:|
+| 1 | `previous_on_time_fill_rate` | 0.09138744 | 0.02312792 |
+| 2 | `previous_fill_count` | 0.02813946 | 0.00729682 |
+| 3 | `average_previous_refill_interval_days` | 0.01413606 | 0.00540277 |
+| 4 | `average_previous_timing_gap_days` | 0.01141233 | 0.01114648 |
+| 5 | `latest_refill_timing_gap_days` | 0.00485516 | 0.00628469 |
+| 6 | `medication_prior_fill_count` | 0.00303437 | 0.00252212 |
+| 7 | `days_since_previous_fill` | 0.00191247 | 0.00080189 |
+| 8 | `medication_prior_average_quantity` | 0.00164921 | 0.00108588 |
+| 9 | `previous_early_fill_rate` | 0.00092024 | 0.00413596 |
+| 10 | `std_previous_refill_interval_days` | 0.00030537 | 0.00155016 |
+| 11 | `prescription_age_days` | 0.00008994 | 0.00011666 |
+| 12 | `current_days_supply` | -0.00023618 | 0.00104775 |
+| 13 | `medication_prior_average_days_supply` | -0.00037787 | 0.00252446 |
+| 14 | `current_quantity_billed` | -0.00118901 | 0.00224362 |
+| 15 | `current_refill_number` | -0.00364157 | 0.00205071 |
+| 16 | `refill_interval_std_available` | -0.00477851 | 0.00406820 |
+
+Permutation importance agrees with coefficients and odds ratios that on-time rate is
+dominant, previous fill count is influential, and timing-gap history matters. Average
+refill interval ranks third despite only the eighth-largest coefficient magnitude,
+while early-fill rate and the availability indicator rank much lower than their
+coefficient magnitudes. The interval standard deviation and availability indicator must
+still be interpreted together. Features with near-zero coefficients mostly have small
+permutation effects; `days_since_previous_fill` is a modest exception at rank seven.
+
+The ranking also overlaps tree evidence: on-time rate led Random Forest and XGBoost;
+latest timing gap was prominent in both; and refill-interval or medication-history
+features received importance across the tree models. Exact ordering differs because
+native tree importance, linear coefficients, and PR-AUC permutation degradation measure
+different properties.
+
+Correlated predictors can substitute for one another, causing permutation importance to
+understate unique contribution when another feature retains similar information.
+Negative or near-zero values can arise from sampling variation and correlation and do
+not justify removal. The data are synthetic and these patterns are not real pharmacy
+behavior. Test was not used, and this analysis did not reopen feature reduction or
+produce any model, feature, hyperparameter, or threshold decision.
+
 ## Phase 2E tree-model feature importance
 
 The tuned Random Forest, XGBoost, and LightGBM pipelines were refitted on Train only
@@ -660,3 +751,54 @@ was not evaluated, and results do not establish real-world clinical performance.
 
 **Test is now consumed.** It must not be reused for model selection, threshold tuning,
 feature selection, or hyperparameter tuning. The result is reporting evidence only.
+
+## Phase 2J post-Test error analysis
+
+The locked model reproduced `TN=42`, `FP=116`, `FN=20`, and `TP=198`. Statistics below
+use final model inputs after Train-fitted preprocessing and are mean / median / standard
+deviation / 25th percentile / 75th percentile.
+
+| Feature | FN (n=20) | TP (n=198) |
+|---|---|---|
+| On-time fill rate | .098 / .000 / .140 / .000 / .250 | .733 / .750 / .182 / .625 / .857 |
+| Latest timing gap | 2.80 / 2.00 / 7.59 / -5.00 / 11.00 | .01 / .00 / 3.49 / -1.00 / 1.00 |
+| Average timing gap | 2.20 / 2.50 / 5.68 / -3.25 / 6.00 | .56 / .27 / 1.80 / -.50 / 1.37 |
+| Previous fill count | 3.05 / 3 / 1.23 / 2 / 4 | 6.04 / 5 / 2.84 / 4 / 8 |
+| Refill interval std | 4.23 / 4.91 / 2.26 / 2.79 / 5.80 | 3.78 / 3.00 / 3.35 / 1.65 / 4.91 |
+| Std available | .850 / 1 / .366 / 1 / 1 | .980 / 1 / .141 / 1 / 1 |
+| Average refill interval | 62.20 / 61 / 24.24 / 37.80 / 86 | 41.52 / 31 / 20.97 / 29.59 / 58.95 |
+| Medication prior fills | 1,144.85 / 1,130 / 85.55 / 1,098.75 / 1,178.50 | 1,197.85 / 1,170 / 116.80 / 1,119.25 / 1,222 |
+| Prescription age | 207.20 / 181 / 96.14 / 160.75 / 247 | 161.03 / 148 / 95.52 / 98.50 / 177 |
+
+| Feature | FP (n=116) | TN (n=42) |
+|---|---|---|
+| On-time fill rate | .624 / .615 / .206 / .500 / .750 | .157 / .200 / .139 / .000 / .250 |
+| Latest timing gap | .47 / .00 / 4.61 / -1 / 1 | 7.45 / 8.50 / 5.97 / 2.50 / 12 |
+| Average timing gap | .87 / .75 / 2.07 / -.78 / 2.21 | 5.69 / 6 / 3.10 / 3.10 / 8.09 |
+| Previous fill count | 6.33 / 5 / 3.60 / 4 / 8 | 4.07 / 4 / 1.73 / 3 / 5 |
+| Refill interval std | 5.01 / 3.51 / 4.92 / 2.50 / 5.94 | 6.21 / 5.68 / 4.21 / 4.66 / 7.23 |
+| Std available | .948 / 1 / .222 / 1 / 1 | .952 / 1 / .216 / 1 / 1 |
+| Average refill interval | 40.85 / 32.10 / 18.94 / 29.49 / 58.50 | 49.98 / 38.31 / 20.40 / 35.70 / 62.92 |
+| Medication prior fills | 1,231.29 / 1,187.50 / 129.03 / 1,140.25 / 1,365.75 | 1,195.64 / 1,162 / 119.45 / 1,121.75 / 1,219 |
+| Prescription age | 154.78 / 156.50 / 87.90 / 85.50 / 182.75 | 192.12 / 180 / 86.07 / 141.50 / 224 |
+
+Seen patients produced `TP=133, FP=76, TN=28, FN=8`; error rate .3429, false-negative
+rate .0567, and false-positive rate .7308. Unseen patients produced `TP=65, FP=40,
+TN=14, FN=12`; error rate .3969, false-negative rate .1558, and false-positive rate
+.7407. Patient identifiers were used only for this audit grouping.
+
+Probability medians (10th/25th/75th/90th percentiles) were: TP .7086
+(.5834/.6476/.7503/.7768), FN .4116 (.3561/.3856/.4358/.4620), FP .6623
+(.5569/.6010/.7335/.7550), and TN .4250 (.3228/.3482/.4703/.4907). “Near threshold”
+means within ±.05 of .50. Five FN (25.0%) and 11 FP (9.5%) were near threshold; the
+remaining 15 FN and 105 FP were higher-confidence errors under this descriptive rule.
+
+Missed renewals descriptively had much lower prior on-time rates, fewer prior fills,
+longer average refill intervals, and older prescriptions than TP observations. False
+positive follow-ups resembled TP observations more than TN observations on on-time
+rate and timing gaps. These synthetic patterns imply no statistical significance or
+model change and must not be presented as real pharmacy or patient behavior.
+
+The Test set has already been consumed. Error-analysis findings are descriptive only
+and were not used for model selection, feature selection, hyperparameter tuning, or
+threshold adjustment.
