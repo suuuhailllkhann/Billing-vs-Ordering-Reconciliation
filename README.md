@@ -189,6 +189,11 @@ authorized internal workflows.
 
 ## Synthetic development data
 
+Phase 2 modeling concluded with a pre-Test lock on the tuned full-feature Logistic
+Regression (`C=0.01`, L2/SAGA) at threshold 0.50 and a Train-only final fitting policy.
+The single final Test evaluation is documented in `docs/ml_methodology.md`. Test is now
+consumed and must not be reused for model, threshold, feature, or hyperparameter choices.
+
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
 out-of-period, whitespace-normalization, duplicate, invalid-quantity, malformed-date,
@@ -220,3 +225,46 @@ breakdowns, unique-patient summaries, patient billing detail, and inventory PDF
 export. Empty exports and periods with no activity are handled without exposing Python
 tracebacks. The UI does not implement or duplicate mapping, validation, reconciliation,
 or analytics rules.
+
+## Synthetic longitudinal research data
+
+Phase 2A adds a fixed-seed generator for fictional patients, medications,
+prescriptions, and repeated fills over an 18-month study window. It also produces a
+point-in-time table for zero-refill patients 10 days before expected supply exhaustion.
+The target captures receipt of a new Rx number for the same patient and exact NDC
+after observation and through 7 days after expected supply end.
+
+The builder retains only facts known by the outreach date, censors rows without a
+complete target window, and preserves the observation date for a future chronological
+split. Identifiers and the zero-refill eligibility field remain audit-only rather than
+model features. No model is trained or evaluated.
+Full assumptions, target semantics, feature definitions, and leakage exclusions are
+documented in `docs/phase2a_longitudinal_data.md`. Regenerate the reviewed artifacts
+with:
+
+```text
+python scripts/generate_longitudinal_data.py
+```
+
+## ML preparation methodology
+
+Phase 2 preparation uses a fixed chronological split: Train before 2026-02-01,
+Validation from 2026-02-01 through 2026-03-31, and Test from 2026-04-01 onward. It
+never randomly splits observations. Identifiers, dates, NDC/Rx fields, and the
+zero-refill eligibility field are excluded from modeling.
+
+Insufficient refill-interval history receives an explicit availability indicator and
+a median learned from Train only; Validation and Test never influence preprocessing
+fit. Repeated patients may occur across periods for production-like evaluation, while
+`patient_id` remains excluded. Final testing will later report overall, previously-seen
+patient, and unseen-patient performance. Full rationale and leakage controls are in
+`docs/ml_methodology.md`.
+
+Phase 2C now includes an untuned Train/Validation comparison of logistic regression,
+random forest, XGBoost, and LightGBM using the fixed 0.50 reference threshold. Test
+remains untouched, and no final model, tuned configuration, or operational threshold
+has been selected. Exact configurations and metrics are recorded in the methodology.
+
+Phase 2D adds deterministic Train-only tuning with five expanding time-series folds
+and PR-AUC scoring. Tuned estimators are compared on Validation at the unchanged 0.50
+reference threshold; Test remains untouched. No final model or threshold is selected.
