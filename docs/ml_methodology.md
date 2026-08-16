@@ -858,3 +858,33 @@ requests are capped at 500 and isolate row-level validation failures. Logging is
 aggregate-only and excludes raw requests, patient/Rx identifiers, feature values, and
 row-level predictions. The API does not persist manual resolutions or inference data
 and is not presented as production deployment infrastructure.
+
+## Phase 3C PostgreSQL persistence and follow-up workflow
+
+PostgreSQL was added after the model and inference behavior were locked. SQLAlchemy 2.x
+owns the application data model, psycopg 3 provides connectivity, and Alembic applies a
+reproducible credential-free migration whose URL comes from the private `DATABASE_URL`
+environment setting. Normal API startup verifies both the locked MLflow artifact and
+database availability and fails with a safe message when either dependency is missing.
+
+Every eligible inference is committed as a new `prediction_records` row, including
+negative predictions. Ineligible inputs are not persisted. A positive prediction creates
+an open `follow_up_cases` row or updates the latest prediction, probability, priority,
+days remaining, and evaluation time on the existing open case. The initial prediction is
+never replaced. Negative predictions never resolve cases. Explicit resolution atomically
+creates the unique `case_resolutions` row and changes case status to resolved; a later
+positive creates a new case. `follow_up_activities` is append-only and cannot be added to
+a resolved case. A PostgreSQL partial unique index prevents two open cases for one Rx.
+
+Batch inference retains per-record validation and now also uses one transaction per
+eligible row. A failed database transaction becomes a safe row-level error while other
+rows continue. Queue order is urgency, fewer days remaining/more overdue, greater latest
+probability, then older opening time. `manual_review` remains outside ML-generated cases
+because Phase 3B deliberately does not infer when more than seven days overdue.
+
+Only Rx lookup identifiers and safe prediction, model-run, case, activity, and resolution
+metadata are stored. Patient identity, DOB, address, NDC, request bodies, feature vectors,
+credentials, and row-level MLflow data are excluded from storage and ordinary logs.
+Persistence does not alter the locked Train-fitted preprocessing, full 16-feature model,
+Logistic Regression configuration, 0.50 threshold, eligibility, priority, or prediction
+semantics.

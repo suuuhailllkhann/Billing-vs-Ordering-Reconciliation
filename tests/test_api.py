@@ -55,7 +55,7 @@ def _record(days_remaining: int = 5, **updates: Any) -> dict[str, Any]:
 
 
 def _client(model: Any) -> TestClient:
-    application = create_app(model=model)
+    application = create_app(model=model, persistence_enabled=False)
     application.dependency_overrides[current_new_york_date] = lambda: TODAY
     return TestClient(application)
 
@@ -181,7 +181,7 @@ def test_startup_fails_clearly_when_model_cannot_load() -> None:
 
 
 def test_openapi_contains_valid_synthetic_request_examples() -> None:
-    schema = create_app(model=SpyModel()).openapi()["components"]["schemas"]
+    schema = create_app(model=SpyModel(), persistence_enabled=False).openapi()["components"]["schemas"]
     single_example = schema["PredictionRequest"]["example"]
     batch_example = schema["BatchPredictionRequest"]["example"]
 

@@ -62,5 +62,9 @@ def load_locked_model(tracking_uri: str = TRACKING_URI) -> Any:
     if len(models) != 1:
         raise RuntimeError("Locked-final model artifact was not found.")
     model = mlflow_sklearn.load_model(models[0].model_uri)
+    if model is None:
+        raise RuntimeError("Locked-final model artifact could not be loaded.")
     validate_locked_model(model)
+    setattr(model, "_pharmacy_model_run_id", runs[0].info.run_id)
+    setattr(model, "_pharmacy_model_version", models[0].model_id)
     return model

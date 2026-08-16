@@ -245,7 +245,50 @@ is `manual_review`. Future manual-resolution reasons are `new_prescription_recei
 The server clock uses `America/New_York`. Logs contain aggregate request outcomes only:
 raw payloads, Rx/patient identifiers, feature values, and row-level predictions are not
 logged or sent to MLflow. This is a local development service, not a production
-deployment; no PostgreSQL, Docker, AWS, or remote serving infrastructure is included.
+deployment. PostgreSQL follow-up persistence is described below; Docker, AWS, and remote
+serving infrastructure are not included.
+
+### PostgreSQL follow-up persistence
+
+Phase 3C adds local PostgreSQL persistence for eligible predictions and pharmacy
+follow-up work. Copy `.env.example` to a local `.env`, replace its placeholder with the
+developer-specific connection, and keep `.env` private. The URL must use psycopg, for
+example `postgresql+psycopg://...`; the application never returns or logs it.
+
+Install and migrate from the repository root:
+
+```powershell
+python -m pip install -e ".[api,ml]"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn pharmacy_reconciliation.api.app:app --reload
+```
+
+SQLAlchemy defines four tables and Alembic versions their schema:
+
+- `prediction_records` stores every eligible 0/1 prediction as immutable history.
+- `follow_up_cases` represents an operational `open` → `resolved` lifecycle.
+- `follow_up_activities` stores append-only outreach history.
+- `case_resolutions` stores exactly one final resolution per case.
+
+A positive prediction creates an open case or updates its latest prediction metadata.
+The initial prediction link is preserved. A negative prediction is stored but never
+closes an open case. A positive prediction after resolution creates a new case; resolved
+history is not reopened. PostgreSQL prevents multiple open cases for the same Rx with a
+partial unique index. Each batch row has its own transaction, so validation or database
+failure for one row does not roll back successful rows.
+
+Follow-up endpoints are `GET /cases`, `GET /cases/{case_id}`,
+`GET/POST /cases/{case_id}/activities`, and `POST /cases/{case_id}/resolve`. The queue
+defaults to open cases, supports status/priority filters, and orders operational urgency
+before supply timing, probability, and case age. Phase 3B manual-review records remain
+ineligible and are not silently converted into ML-generated cases; a separate manual
+case-entry pathway is future work.
+
+Persistence stores Rx lookup numbers and aggregate prediction/case metadata only. It
+does not store patient identity, DOB, address, NDC, raw payloads, model feature vectors,
+or row-level MLflow inference data. PostgreSQL changes operational recordkeeping only;
+the locked model, preprocessing, 16-feature contract, threshold, and inference rules are
+unchanged. This remains local development infrastructure; Docker and AWS are not used.
 
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,

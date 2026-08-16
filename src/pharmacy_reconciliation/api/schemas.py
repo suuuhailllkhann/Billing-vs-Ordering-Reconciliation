@@ -1,6 +1,7 @@
 """Public request and response schemas for batch renewal inference."""
 
-from datetime import date
+import uuid
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -121,3 +122,72 @@ class HealthResponse(BaseModel):
     status: Literal["healthy"] = "healthy"
     model_loaded: Literal[True] = True
     model_status: Literal["locked_final"] = "locked_final"
+
+
+Priority = Literal["low", "medium", "high", "urgent", "urgent_overdue"]
+ActivityType = Literal[
+    "called_prescriber", "left_voicemail", "fax_sent", "message_sent",
+    "spoke_with_prescriber", "patient_contacted", "other",
+]
+ResolutionType = Literal[
+    "new_prescription_received", "medication_discontinued", "dose_changed",
+    "medication_changed", "patient_changed_pharmacy", "patient_unreachable",
+    "prescriber_no_response", "other",
+]
+
+
+class CaseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    case_id: uuid.UUID
+    rx_number: str
+    initial_prediction_id: uuid.UUID
+    latest_prediction_id: uuid.UUID
+    status: Literal["open", "resolved"]
+    priority: Priority
+    latest_renewal_probability: float
+    latest_days_until_supply_end: int
+    opened_at: datetime
+    last_evaluated_at: datetime
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ActivityCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activity_type: ActivityType
+    activity_note: str | None = None
+    performed_at: datetime | None = None
+    performed_by: str | None = None
+
+
+class ActivityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    activity_id: uuid.UUID
+    case_id: uuid.UUID
+    activity_type: ActivityType
+    activity_note: str | None
+    performed_at: datetime
+    performed_by: str | None
+    created_at: datetime
+
+
+class ResolutionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resolution_type: ResolutionType
+    resolution_note: str | None = None
+
+
+class ResolutionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    resolution_id: uuid.UUID
+    case_id: uuid.UUID
+    resolution_type: ResolutionType
+    resolution_note: str | None
+    resolved_at: datetime
+    created_at: datetime
