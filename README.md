@@ -429,6 +429,37 @@ volume persistence across normal Compose container recreation. It does not estab
 backup, disaster recovery, production readiness, availability, security hardening, or
 real-world pharmacy/model performance.
 
+### Runtime health and request tracing
+
+Phase 3E adds a small local observability boundary without changing inference or
+persistence behavior. Every HTTP response includes a generated `X-Request-ID`; the API
+logs only that ID, method, path, status code, and request duration. Request bodies, Rx
+numbers, patient identifiers, feature values, prediction results, credentials, and
+environment values are excluded from request logs.
+
+`GET /health/live` confirms that the API process is running. `GET /health/ready` confirms
+that the locked model is loaded and the configured persistence database answers a
+lightweight query. The existing `GET /health` remains a backward-compatible readiness
+endpoint. Docker Compose checks `/health/ready`; the PostgreSQL health check and service
+architecture are unchanged.
+
+Manual local checks can be run after Compose starts:
+
+```powershell
+Invoke-WebRequest http://localhost:8000/health/live
+Invoke-WebRequest http://localhost:8000/health/ready
+Invoke-WebRequest http://localhost:8000/health
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose logs api
+```
+
+Manual Phase 3E validation confirmed that the Compose API service reported healthy;
+`/health/live`, `/health/ready`, and the backward-compatible `/health` each returned HTTP
+200, with readiness reporting both the model and database available. Responses included
+`X-Request-ID`, and the structured request event was visible in container output with
+only request ID, method, path, status, and duration. Inspection confirmed that request
+payloads and sensitive values were not logged.
+
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
 out-of-period, whitespace-normalization, duplicate, invalid-quantity, malformed-date,

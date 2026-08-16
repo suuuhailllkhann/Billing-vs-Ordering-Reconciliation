@@ -89,6 +89,36 @@ def _counts(database: sessionmaker[Session]) -> tuple[int, int]:
         )
 
 
+def test_readiness_requires_database_but_liveness_does_not() -> None:
+    def unavailable_connection() -> Any:
+        raise RuntimeError("database unavailable")
+
+    engine = create_engine("sqlite://", creator=unavailable_connection)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    application = create_app(model=MutableModel(), session_factory=factory)
+
+    with TestClient(application) as client:
+        live = client.get("/health/live")
+        ready = client.get("/health/ready")
+        legacy = client.get("/health")
+
+    assert live.status_code == 200
+    assert live.json() == {"status": "alive"}
+    assert ready.status_code == 503
+    assert ready.json() == {
+        "status": "not_ready",
+        "model_loaded": True,
+        "database_available": False,
+        "model_status": "locked_final",
+    }
+    assert legacy.status_code == 503
+    assert legacy.json() == {
+        "status": "unavailable",
+        "model_loaded": True,
+        "model_status": "locked_final",
+    }
+
+
 def test_database_configuration_is_environment_only_and_safe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

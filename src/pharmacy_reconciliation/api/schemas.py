@@ -124,6 +124,17 @@ class HealthResponse(BaseModel):
     model_status: Literal["locked_final"] = "locked_final"
 
 
+class LivenessResponse(BaseModel):
+    status: Literal["alive"] = "alive"
+
+
+class ReadinessResponse(BaseModel):
+    status: Literal["ready", "not_ready"]
+    model_loaded: bool
+    database_available: bool
+    model_status: Literal["locked_final"] = "locked_final"
+
+
 Priority = Literal["low", "medium", "high", "urgent", "urgent_overdue"]
 ActivityType = Literal[
     "called_prescriber", "left_voicemail", "fax_sent", "message_sent",

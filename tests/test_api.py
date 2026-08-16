@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -72,6 +73,36 @@ def test_health_is_minimal_and_locked_model_loads() -> None:
         assert client.get("/health").json() == {
             "status": "healthy", "model_loaded": True, "model_status": "locked_final"
         }
+        assert client.get("/health/live").json() == {"status": "alive"}
+        assert client.get("/health/ready").json() == {
+            "status": "ready",
+            "model_loaded": True,
+            "database_available": True,
+            "model_status": "locked_final",
+        }
+
+
+def test_request_id_header_and_safe_structured_logging(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.INFO,
+        logger="uvicorn.error.pharmacy_reconciliation.api",
+    )
+    with _client(SpyModel()) as client:
+        response = client.post(
+            "/predict",
+            json=_record(rx_number="RX-PRIVATE-LOG-CHECK"),
+        )
+    request_id = response.headers["X-Request-ID"]
+    assert str(uuid.UUID(request_id)) == request_id
+    assert f"request_id={request_id}" in caplog.text
+    assert "method=POST" in caplog.text
+    assert "path=/predict" in caplog.text
+    assert "status_code=200" in caplog.text
+    assert "duration_ms=" in caplog.text
+    assert "RX-PRIVATE-LOG-CHECK" not in caplog.text
+    assert "renewal_probability" not in caplog.text
 
 
 def test_single_prediction_derives_dates_and_excludes_audit_business_fields() -> None:
@@ -133,7 +164,10 @@ def test_refills_remaining_blocks_model() -> None:
 
 
 def test_batch_continues_after_invalid_record_and_logs_no_identifier(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.INFO, logger="pharmacy_reconciliation.api")
+    caplog.set_level(
+        logging.INFO,
+        logger="uvicorn.error.pharmacy_reconciliation.api",
+    )
     records = [_record(5), _record(5, rx_number="SECRET-RX", previous_on_time_fill_rate=2)]
     with _client(SpyModel()) as client:
         response = client.post("/predict/batch", json={"records": records})

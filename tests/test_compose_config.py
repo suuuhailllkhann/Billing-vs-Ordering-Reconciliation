@@ -14,6 +14,13 @@ def test_compose_uses_internal_database_network_and_health_dependency() -> None:
     assert "localhost" not in compose
 
 
+def test_compose_api_healthcheck_uses_readiness_endpoint() -> None:
+    compose = Path("compose.yaml").read_text(encoding="utf-8")
+    assert "http://127.0.0.1:8000/health/ready" in compose
+    assert "urllib.request.urlopen" in compose
+    assert compose.count("healthcheck:") == 2
+
+
 def test_compose_persists_postgres_18_and_mounts_mlflow_read_only() -> None:
     compose = Path("compose.yaml").read_text(encoding="utf-8")
     assert "pharmacy_postgres_data:/var/lib/postgresql" in compose

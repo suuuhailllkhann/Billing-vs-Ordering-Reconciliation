@@ -5,12 +5,16 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
+from time import perf_counter
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import JSONResponse, Response
 
 from pharmacy_reconciliation.api.model_loader import load_locked_model
 from pharmacy_reconciliation.api.schemas import (
@@ -20,9 +24,11 @@ from pharmacy_reconciliation.api.schemas import (
     BatchPredictionResponse,
     CaseResponse,
     HealthResponse,
+    LivenessResponse,
     PredictionError,
     PredictionRequest,
     PredictionResponse,
+    ReadinessResponse,
     ResolutionCreate,
     ResolutionResponse,
 )
@@ -39,7 +45,7 @@ from pharmacy_reconciliation.persistence.repository import (
     NotFoundError,
 )
 
-LOGGER = logging.getLogger("pharmacy_reconciliation.api")
+LOGGER = logging.getLogger("uvicorn.error.pharmacy_reconciliation.api")
 NEW_YORK = ZoneInfo("America/New_York")
 
 
@@ -92,8 +98,55 @@ def create_app(
         lifespan=lifespan,
     )
 
+    @application.middleware("http")
+    async def request_observability(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        request_id = str(uuid.uuid4())
+        started_at = perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error."},
+            )
+        duration_ms = (perf_counter() - started_at) * 1000
+        response.headers["X-Request-ID"] = request_id
+        LOGGER.info(
+            "request_completed request_id=%s method=%s path=%s status_code=%d duration_ms=%.3f",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+
+    @application.get("/health/live", response_model=LivenessResponse)
+    def health_live() -> LivenessResponse:
+        return LivenessResponse()
+
+    @application.get("/health/ready", response_model=ReadinessResponse)
+    def health_ready() -> ReadinessResponse | Response:
+        readiness = _readiness(application)
+        if readiness.status == "not_ready":
+            return JSONResponse(status_code=503, content=readiness.model_dump())
+        return readiness
+
     @application.get("/health", response_model=HealthResponse)
-    def health() -> HealthResponse:
+    def health() -> HealthResponse | Response:
+        readiness = _readiness(application)
+        if readiness.status == "not_ready":
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "model_loaded": readiness.model_loaded,
+                    "model_status": "locked_final",
+                },
+            )
         return HealthResponse()
 
     @application.post("/predict", response_model=PredictionResponse)
@@ -241,6 +294,25 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(error)) from error
 
     return application
+
+
+def _readiness(application: FastAPI) -> ReadinessResponse:
+    model_loaded = hasattr(application.state, "prediction_service")
+    database_available = not application.state.persistence_enabled
+    if application.state.persistence_enabled:
+        factory = application.state.session_factory
+        if factory is not None:
+            try:
+                with factory() as session:
+                    session.execute(text("SELECT 1"))
+                database_available = True
+            except Exception:
+                database_available = False
+    return ReadinessResponse(
+        status="ready" if model_loaded and database_available else "not_ready",
+        model_loaded=model_loaded,
+        database_available=database_available,
+    )
 
 
 def _required_session(application: FastAPI) -> sessionmaker[Session]:

@@ -959,3 +959,26 @@ retrieval. After normal `docker compose down` and service recreation, that same 
 remained available with unchanged stored details. This demonstrates local named-volume
 persistence only—not backup, disaster recovery, production readiness, or real-world
 patient/pharmacy behavior.
+
+## Phase 3E runtime observability boundary
+
+Phase 3E adds request correlation and health separation without changing the locked
+model, preprocessing, threshold, eligibility logic, persistence schema, or follow-up
+workflow. Each HTTP request receives a new UUID returned in `X-Request-ID`. One aggregate
+key/value log event records only the request ID, HTTP method, URL path, status code, and
+elapsed milliseconds. Bodies, Rx and patient identifiers, feature values, row-level
+predictions, credentials, and environment values are deliberately excluded.
+
+`/health/live` checks only that the API process can answer. `/health/ready` checks the
+already-loaded model plus database availability with a lightweight `SELECT 1`; it does
+not reload or refit the model. `/health` retains its prior readiness role for backward
+compatibility. The Compose API health check now uses `/health/ready`, while the existing
+PostgreSQL health check and service dependency remain unchanged. This is intentionally a
+small local hardening layer, not distributed tracing, metrics infrastructure, or a claim
+of production operational readiness.
+
+Manual Compose validation confirmed a healthy API service and HTTP 200 responses from
+`/health/live`, `/health/ready`, and `/health`; readiness reported both the locked model
+and database available. The `X-Request-ID` response header and structured request event
+were also verified in container output. The observed event contained only request ID,
+method, path, status, and duration, with no request payload or sensitive data present.
