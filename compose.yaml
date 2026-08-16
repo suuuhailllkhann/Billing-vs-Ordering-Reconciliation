@@ -1,0 +1,45 @@
+name: pharmacy-reconciliation
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: pharmacy_reconciliation
+      POSTGRES_USER: pharmacy_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.compose}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - pharmacy_postgres_data:/var/lib/postgresql
+
+  api:
+    image: pharmacy-reconciliation-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://pharmacy_app:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.compose}@db:5432/pharmacy_reconciliation
+      MLFLOW_TRACKING_URI: sqlite:////app/runtime/mlflow.db
+      MLFLOW_ARTIFACT_ROOT: /app/runtime/mlflow_artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - type: bind
+        source: ./mlflow.db
+        target: /app/runtime/mlflow.db
+        read_only: true
+      - type: bind
+        source: ./mlflow_artifacts
+        target: /app/runtime/mlflow_artifacts
+        read_only: true
+
+volumes:
+  pharmacy_postgres_data:
+    name: pharmacy_postgres_data

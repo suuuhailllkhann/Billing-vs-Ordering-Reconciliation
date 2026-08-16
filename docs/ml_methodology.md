@@ -921,5 +921,41 @@ existing workflow completed an eligible prediction, prediction/case persistence,
 activity creation, explicit resolution, and retrieval of the resolved case. This is a
 local integration verification only; it is not evidence about real patients, pharmacy
 operations, model quality, production security, availability, or scale. Docker Compose
-and multi-container orchestration are intentionally deferred to Phase 3D-B; AWS remains
-out of scope.
+and multi-container orchestration are implemented separately in Phase 3D-B below; AWS
+remains out of scope.
+
+## Phase 3D-B Compose database boundary
+
+Phase 3D-B introduces local orchestration without changing inference or workflow logic.
+The `api` service reuses the Phase 3D-A Dockerfile and the `db` service uses the official
+`postgres:18` image. Compose networking supplies `db:5432` as the database endpoint. A
+PostgreSQL `pg_isready` health check and `depends_on: condition: service_healthy` prevent
+normal API startup from racing the database process.
+
+The named `pharmacy_postgres_data` volume mounts at `/var/lib/postgresql`. PostgreSQL 18
+uses a version-specific `PGDATA` below that directory, so the older
+`/var/lib/postgresql/data` target is not used. The volume survives `docker compose down`;
+deleting it with `down -v` is explicitly outside the normal workflow. This is a fresh
+synthetic-development database initialized by the official image and existing Alembic
+migrations. It does not import or relocate the Windows PostgreSQL data directory.
+
+Database credentials come only from ignored `.env.compose` runtime interpolation. The
+tracked `.env.compose.example` contains a placeholder, and local non-Compose `.env`
+behavior remains unchanged. The API image now includes `alembic.ini` and `migrations/`
+solely to support the explicit one-off `python -m alembic upgrade head` command after the
+database is healthy. Migrations are not an API entrypoint and are not silently executed
+on each startup.
+
+The locked MLflow SQLite database and artifacts remain outside the Compose lifecycle and
+are mounted read-only at the Phase 3D-A paths. No MLflow server, new run, artifact copy,
+model training, or registry is added.
+
+Manual Phase 3D-B validation used a fresh Compose PostgreSQL volume and synthetic-only
+input. PostgreSQL became healthy, the explicit Alembic command applied revision
+`20260815_01`, and FastAPI loaded the existing locked-final artifact and passed its health
+check. The established workflow then completed an eligible synthetic prediction,
+prediction/case persistence, activity creation, explicit resolution, and resolved-case
+retrieval. After normal `docker compose down` and service recreation, that same case
+remained available with unchanged stored details. This demonstrates local named-volume
+persistence only—not backup, disaster recovery, production readiness, or real-world
+patient/pharmacy behavior.

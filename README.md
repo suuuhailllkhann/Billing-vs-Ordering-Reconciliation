@@ -348,7 +348,86 @@ started, loaded the existing locked-final model, reached Windows-host PostgreSQL
 prediction, persisted an open follow-up case, accepted an activity, explicitly resolved
 the case, and returned the resolved state with a resolution timestamp. This confirms the
 local Docker integration path; it does not establish production readiness or real-world
-pharmacy/model performance. Docker Compose is intentionally deferred to Phase 3D-B.
+pharmacy/model performance. Docker Compose is implemented separately in Phase 3D-B below.
+
+### Docker Compose with PostgreSQL
+
+Phase 3D-B adds `compose.yaml` with two services: the existing FastAPI image (`api`) and
+the official PostgreSQL 18 image (`db`). Compose DNS gives the API the database hostname
+`db`; neither `localhost` nor `host.docker.internal` is used between these containers.
+PostgreSQL data is stored in the named `pharmacy_postgres_data` volume at
+`/var/lib/postgresql`, the volume target required by the PostgreSQL 18 image layout.
+The existing Windows PostgreSQL database is not copied or migrated into this new volume.
+
+Create an ignored `.env.compose` with a generated URL-safe local password. Keep this file
+for later restarts because changing the initialization variable does not change the
+password inside an existing database volume:
+
+```powershell
+$secretBytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Fill($secretBytes)
+$composePassword = [Convert]::ToHexString($secretBytes).ToLowerInvariant()
+"POSTGRES_PASSWORD=$composePassword" | Set-Content -Encoding ascii .env.compose
+Remove-Variable secretBytes, composePassword
+```
+
+Validate, build, start only PostgreSQL, and inspect its health:
+
+```powershell
+docker compose --env-file .env.compose config
+docker compose --env-file .env.compose build api
+docker compose --env-file .env.compose up -d db
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose logs db
+```
+
+After `db` reports healthy, apply committed migrations explicitly through a one-off API
+image container, then start FastAPI:
+
+```powershell
+docker compose --env-file .env.compose run --rm --no-deps api python -m alembic upgrade head
+docker compose --env-file .env.compose up -d api
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose logs -f api
+```
+
+The API remains available at `http://localhost:8000`; Swagger remains at `/docs`:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Start-Process http://localhost:8000/docs
+```
+
+Stop and remove the containers/network while preserving PostgreSQL data, then recreate
+them with the same environment file:
+
+```powershell
+docker compose --env-file .env.compose down
+docker compose --env-file .env.compose up -d
+docker compose --env-file .env.compose ps
+docker volume inspect pharmacy_postgres_data
+```
+
+To verify persistence manually, create a clearly synthetic prediction/case, record its
+case ID, run `docker compose down` without `-v`, restart with `docker compose up -d`, and
+confirm `GET /cases/{case_id}` still returns it. Do not use `docker compose down -v` in
+the normal workflow: `-v` deliberately deletes the named database volume. MLflow remains
+outside Compose as read-only bind-mounted `mlflow.db` and `mlflow_artifacts/`; no MLflow
+server is introduced.
+
+Phase 3D-B was manually validated with synthetic-only input. A fresh PostgreSQL 18
+container initialized the expected database and application role, reported healthy, and
+accepted the explicit Alembic upgrade through revision `20260815_01`. FastAPI then
+started, loaded the existing locked-final MLflow model from the read-only mounts, and
+returned a healthy `/health` response. The existing API completed an eligible synthetic
+prediction, persisted its prediction and open case, accepted an activity, explicitly
+resolved the case, and returned the resolved state.
+
+The same synthetic case was also retrieved after `docker compose down` removed the
+containers/network and `docker compose up -d` recreated them. This confirms local named-
+volume persistence across normal Compose container recreation. It does not establish
+backup, disaster recovery, production readiness, availability, security hardening, or
+real-world pharmacy/model performance.
 
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
