@@ -4,6 +4,8 @@
 operational follow-up workflows, and containerized deployment using entirely synthetic
 pharmacy data.*
 
+[![CI](https://github.com/suuuhailllkhann/Billing-vs-Ordering-Reconciliation/actions/workflows/ci.yml/badge.svg)](https://github.com/suuuhailllkhann/Billing-vs-Ordering-Reconciliation/actions/workflows/ci.yml)
+
 > All repository data, identities, medications, prescriptions, insurance records, and
 > examples are fictional. Reported model results describe a synthetic simulation and
 > must not be interpreted as real pharmacy or patient performance.
