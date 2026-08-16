@@ -9,6 +9,11 @@ htmlcov/
 build/
 dist/
 mlruns/
+mlflow_artifacts/
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlflow.db-journal
 
 .venv/
 venv/

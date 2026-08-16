@@ -808,8 +808,10 @@ threshold adjustment.
 MLflow was introduced after Phase 2 decisions were locked to preserve an auditable local
 record of the actual modeling history. It wraps established workflows and fixed
 configurations; it does not tune, select, or change models. Tracking uses the ignored
-repository-local `mlruns/` file store with `MLFLOW_ALLOW_FILE_STORE=true`. There is no
-database, container, cloud service, or remote server.
+repository-local SQLite backend `sqlite:///mlflow.db`, with model artifacts under the
+ignored `mlflow_artifacts/` directory. The legacy `mlruns/` FileStore was not migrated
+and remains untouched. There is no PostgreSQL, container, cloud service, or remote
+server.
 
 Three experiments contain nine runs:
 

@@ -1,6 +1,5 @@
 """Local MLflow logging for the established Phase 2 modeling history."""
 
-import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -13,6 +12,7 @@ from pharmacy_reconciliation.research.baselines import (
     BASELINE_RANDOM_SEED,
     BASELINE_THRESHOLD,
     compare_baselines,
+    evaluate_classifier,
     prepare_baseline_partitions,
 )
 from pharmacy_reconciliation.research.features import TARGET_COLUMN
@@ -27,7 +27,8 @@ from pharmacy_reconciliation.research.tuning import (
 )
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
-DEFAULT_TRACKING_DIRECTORY = REPOSITORY_ROOT / "mlruns"
+DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
+DEFAULT_ARTIFACT_DIRECTORY = REPOSITORY_ROOT / "mlflow_artifacts"
 BASELINE_EXPERIMENT = "pharmacy-reconciliation-baselines"
 TUNED_EXPERIMENT = "pharmacy-reconciliation-tuned"
 FINAL_EXPERIMENT = "pharmacy-reconciliation-locked-final"
@@ -42,10 +43,17 @@ TUNED_CV_SCORES = {
 }
 
 
-def _configure(tracking_directory: Path) -> None:
-    tracking_directory.mkdir(parents=True, exist_ok=True)
-    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
-    mlflow.set_tracking_uri(tracking_directory.resolve().as_uri())
+def _configure(tracking_uri: str) -> None:
+    mlflow.set_tracking_uri(tracking_uri)
+
+
+def _set_experiment(name: str, artifact_directory: Path) -> None:
+    client = mlflow.MlflowClient()
+    if client.get_experiment_by_name(name) is None:
+        location = artifact_directory.joinpath(name).resolve()
+        location.mkdir(parents=True, exist_ok=True)
+        client.create_experiment(name, artifact_location=location.as_uri())
+    mlflow.set_experiment(name)
 
 
 def _log_metrics(prefix: str, metrics: Any) -> None:
@@ -67,15 +75,16 @@ def _base_tags(stage: str, status: str, test_consumed: bool) -> dict[str, str]:
 
 def log_modeling_history(
     observations: pd.DataFrame,
-    tracking_directory: Path = DEFAULT_TRACKING_DIRECTORY,
+    tracking_uri: str = DEFAULT_TRACKING_URI,
+    artifact_directory: Path = DEFAULT_ARTIFACT_DIRECTORY,
     log_final_artifact: bool = True,
 ) -> dict[str, list[str]]:
     """Log 4 baseline, 4 fixed tuned-history, and 1 locked final run locally."""
-    _configure(tracking_directory)
+    _configure(tracking_uri)
     run_ids: dict[str, list[str]] = {"baseline": [], "tuned": [], "final": []}
 
     baseline_results = compare_baselines(prepare_baseline_partitions(observations))
-    mlflow.set_experiment(BASELINE_EXPERIMENT)
+    _set_experiment(BASELINE_EXPERIMENT, artifact_directory)
     for result in baseline_results:
         with mlflow.start_run(run_name=result.model_name) as run:
             mlflow.set_tags(_base_tags("baseline", "candidate", False))
@@ -93,7 +102,7 @@ def log_modeling_history(
             run_ids["baseline"].append(run.info.run_id)
 
     tuned_partitions = prepare_tuning_partitions(observations)
-    mlflow.set_experiment(TUNED_EXPERIMENT)
+    _set_experiment(TUNED_EXPERIMENT, artifact_directory)
     for model_name, model in tuned_full_feature_pipelines().items():
         model.fit(tuned_partitions.train.features, tuned_partitions.train.target)
         with mlflow.start_run(run_name=model_name) as run:
@@ -108,7 +117,6 @@ def log_modeling_history(
                 **{f"model_{key}": str(value) for key, value in classifier.get_params(deep=False).items()},
             })
             mlflow.log_metric("best_cv_pr_auc", TUNED_CV_SCORES[model_name])
-            from pharmacy_reconciliation.research.baselines import evaluate_classifier
             _log_metrics("train", evaluate_classifier(model, tuned_partitions.train))
             _log_metrics("validation", evaluate_classifier(model, tuned_partitions.validation))
             run_ids["tuned"].append(run.info.run_id)
@@ -117,7 +125,7 @@ def log_modeling_history(
     final_model = tuned_full_feature_pipelines()["Logistic Regression"]
     final_model.fit(split.train.loc[:, list(MODEL_FEATURE_COLUMNS[:-1])], split.train[TARGET_COLUMN])
     final_metrics = evaluate_locked_test(observations)
-    mlflow.set_experiment(FINAL_EXPERIMENT)
+    _set_experiment(FINAL_EXPERIMENT, artifact_directory)
     with mlflow.start_run(run_name="locked-logistic-regression") as run:
         mlflow.set_tags(_base_tags("final", "locked_final", True))
         mlflow.log_params({

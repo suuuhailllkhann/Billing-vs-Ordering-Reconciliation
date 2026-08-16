@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from pharmacy_reconciliation.research.mlflow_tracking import (
-    DEFAULT_TRACKING_DIRECTORY,
+    DEFAULT_TRACKING_URI,
     log_modeling_history,
 )
 
@@ -15,7 +15,7 @@ OBSERVATIONS = ROOT / "data" / "synthetic" / "longitudinal" / "refill_observatio
 
 def main() -> None:
     runs = log_modeling_history(pd.read_csv(OBSERVATIONS))
-    print(f"Logged {sum(map(len, runs.values()))} runs to {DEFAULT_TRACKING_DIRECTORY}")
+    print(f"Logged {sum(map(len, runs.values()))} runs to {DEFAULT_TRACKING_URI}")
 
 
 if __name__ == "__main__":

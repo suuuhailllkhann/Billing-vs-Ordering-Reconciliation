@@ -201,12 +201,13 @@ Install the ML dependencies, record the established history, and launch the loca
 ```powershell
 python -m pip install -e ".[ml]"
 python scripts/track_mlflow_history.py
-mlflow ui --backend-store-uri ./mlruns
+.\.venv\Scripts\python.exe -m mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
-Open `http://127.0.0.1:5000` after starting the UI. The local store is `mlruns/`; it is
-ignored by Git and contains only aggregate configuration/metrics plus the locked final
-pipeline artifact. Running tracking does not rerun tuning or change locked decisions.
+Open `http://127.0.0.1:5000` after starting the UI. Run metadata is stored in the
+Git-ignored local `mlflow.db`; model artifacts are stored under the ignored
+`mlflow_artifacts/` directory. The legacy ignored `mlruns/` directory is not migrated or
+modified. Running tracking does not rerun tuning or change locked decisions.
 
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
