@@ -460,6 +460,13 @@ Manual Phase 3E validation confirmed that the Compose API service reported healt
 only request ID, method, path, status, and duration. Inspection confirmed that request
 payloads and sensitive values were not logged.
 
+### Future AWS deployment planning
+
+No AWS deployment or resource creation has been performed. A documentation-only future
+path from the validated local Compose system to ECR, EC2, EBS, and CloudWatch is recorded
+in [the AWS deployment plan](docs/aws_deployment_plan.md), including security, privacy,
+cost, and possible later managed-service considerations.
+
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
 out-of-period, whitespace-normalization, duplicate, invalid-quantity, malformed-date,

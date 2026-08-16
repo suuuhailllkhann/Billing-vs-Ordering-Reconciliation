@@ -982,3 +982,12 @@ Manual Compose validation confirmed a healthy API service and HTTP 200 responses
 and database available. The `X-Request-ID` response header and structured request event
 were also verified in container output. The observed event contained only request ID,
 method, path, status, and duration, with no request payload or sensitive data present.
+
+## Phase 4 future AWS deployment planning
+
+Phase 4 adds documentation only. The proposed ECR, EC2, Docker Compose, EBS, and
+CloudWatch path—and possible later RDS, S3, or ECS/Fargate evolution—is described in
+[`aws_deployment_plan.md`](aws_deployment_plan.md). No AWS deployment or resource
+creation occurred, and the locally validated Compose system remains the only deployment
+validated by this project. The plan makes no production-readiness, real-data, or AWS cost
+commitment.
