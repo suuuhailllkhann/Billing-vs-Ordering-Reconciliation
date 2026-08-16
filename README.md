@@ -243,3 +243,7 @@ design, persistence behavior, Docker validation, and observability decisions.
 Current validation demonstrates a local, synthetic end-to-end workflow; it does not
 demonstrate real-world model quality, clinical utility, regulatory compliance, or
 production availability.
+
+## License
+
+This project is available under the [MIT License](LICENSE).
