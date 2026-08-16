@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title description">
+  <title id="title">Synthetic Test Evaluation</title>
+  <desc id="description">Horizontal bar chart of locked Logistic Regression metrics on 376 synthetic Test observations: accuracy 0.6383, precision 0.6306, recall 0.9083, F1 0.7444, PR-AUC 0.7352, and ROC-AUC 0.6710. These are synthetic research results, not clinical performance.</desc>
+  <rect width="1000" height="560" rx="24" fill="#f8fafc"/>
+  <text x="54" y="54" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="29" font-weight="700" fill="#0f172a">Synthetic Test Evaluation</text>
+  <text x="54" y="82" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" fill="#64748b">Locked Logistic Regression · 376 synthetic observations · Not clinical performance</text>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">
+    <text x="210" y="120" text-anchor="middle">0.0</text>
+    <text x="350" y="120" text-anchor="middle">0.2</text>
+    <text x="490" y="120" text-anchor="middle">0.4</text>
+    <text x="630" y="120" text-anchor="middle">0.6</text>
+    <text x="770" y="120" text-anchor="middle">0.8</text>
+    <text x="910" y="120" text-anchor="middle">1.0</text>
+  </g>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <path d="M210 132V492"/><path d="M350 132V492"/><path d="M490 132V492"/>
+    <path d="M630 132V492"/><path d="M770 132V492"/><path d="M910 132V492"/>
+  </g>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155" text-anchor="end">
+    <text x="188" y="169">Accuracy</text>
+    <text x="188" y="229">Precision</text>
+    <text x="188" y="289">Recall</text>
+    <text x="188" y="349">F1</text>
+    <text x="188" y="409">PR-AUC</text>
+    <text x="188" y="469">ROC-AUC</text>
+  </g>
+
+  <g>
+    <rect x="210" y="144" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="144" width="446.81" height="36" rx="7" fill="#2563eb"/>
+    <text x="671" y="168" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.6383</text>
+
+    <rect x="210" y="204" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="204" width="441.42" height="36" rx="7" fill="#2563eb"/>
+    <text x="666" y="228" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.6306</text>
+
+    <rect x="210" y="264" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="264" width="635.81" height="36" rx="7" fill="#0d9488"/>
+    <text x="860" y="288" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.9083</text>
+
+    <rect x="210" y="324" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="324" width="521.08" height="36" rx="7" fill="#2563eb"/>
+    <text x="746" y="348" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.7444</text>
+
+    <rect x="210" y="384" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="384" width="514.64" height="36" rx="7" fill="#7c3aed"/>
+    <text x="739" y="408" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.7352</text>
+
+    <rect x="210" y="444" width="700" height="36" rx="7" fill="#e2e8f0"/>
+    <rect x="210" y="444" width="469.70" height="36" rx="7" fill="#7c3aed"/>
+    <text x="694" y="468" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">0.6710</text>
+  </g>
+
+  <line x1="210" y1="505" x2="910" y2="505" stroke="#94a3b8"/>
+  <text x="560" y="535" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#64748b">Metric value (0–1)</text>
+</svg>

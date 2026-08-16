@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="510" viewBox="0 0 1400 510" role="img" aria-labelledby="title description">
+  <title id="title">Pharmacy renewal platform architecture</title>
+  <desc id="description">Synthetic data flows through feature engineering, leakage-safe temporal machine learning, a locked Logistic Regression model, MLflow, FastAPI, PostgreSQL, and Docker Compose. AWS is shown separately as a future-only deployment path.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="future-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="510" rx="24" fill="#f8fafc"/>
+  <text x="56" y="52" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#0f172a">System architecture</text>
+  <text x="56" y="82" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" fill="#64748b">Validated local workflow · deterministic synthetic data only</text>
+
+  <rect x="38" y="105" width="1324" height="238" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="62" y="137" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#475569">VALIDATED LOCAL SYSTEM</text>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" text-anchor="middle" filter="url(#shadow)">
+    <g transform="translate(62 174)">
+      <rect width="142" height="104" rx="14" fill="#e0f2fe" stroke="#7dd3fc"/>
+      <circle cx="71" cy="28" r="12" fill="#0284c7"/>
+      <text x="71" y="61" font-size="15" font-weight="700" fill="#0f172a">Synthetic data</text>
+      <text x="71" y="82" font-size="12" fill="#475569">Fixed-seed histories</text>
+    </g>
+    <g transform="translate(228 174)">
+      <rect width="142" height="104" rx="14" fill="#e0f2fe" stroke="#7dd3fc"/>
+      <path d="M58 34h26M63 27v14M78 23v22" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
+      <text x="71" y="61" font-size="15" font-weight="700" fill="#0f172a">Feature</text>
+      <text x="71" y="80" font-size="15" font-weight="700" fill="#0f172a">engineering</text>
+      <text x="71" y="97" font-size="11" fill="#475569">Point-in-time</text>
+    </g>
+    <g transform="translate(394 174)">
+      <rect width="158" height="104" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+      <path d="M63 38l9-10 9 7 13-15" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="79" y="61" font-size="15" font-weight="700" fill="#0f172a">Leakage-safe</text>
+      <text x="79" y="80" font-size="15" font-weight="700" fill="#0f172a">temporal ML</text>
+      <text x="79" y="97" font-size="11" fill="#475569">Chronological CV</text>
+    </g>
+    <g transform="translate(576 174)">
+      <rect width="166" height="104" rx="14" fill="#ede9fe" stroke="#c4b5fd"/>
+      <rect x="68" y="17" width="30" height="25" rx="5" fill="#7c3aed"/>
+      <path d="M74 17v-5a9 9 0 0118 0v5" fill="none" stroke="#7c3aed" stroke-width="4"/>
+      <text x="83" y="61" font-size="15" font-weight="700" fill="#0f172a">Locked Logistic</text>
+      <text x="83" y="80" font-size="15" font-weight="700" fill="#0f172a">Regression</text>
+      <text x="83" y="97" font-size="11" fill="#475569">Threshold 0.50</text>
+    </g>
+    <g transform="translate(766 174)">
+      <rect width="142" height="104" rx="14" fill="#f3e8ff" stroke="#d8b4fe"/>
+      <path d="M54 22h34v22H54zM60 28h22M60 35h15" fill="none" stroke="#9333ea" stroke-width="3" stroke-linecap="round"/>
+      <text x="71" y="67" font-size="15" font-weight="700" fill="#0f172a">MLflow</text>
+      <text x="71" y="87" font-size="12" fill="#475569">Locked artifact</text>
+    </g>
+    <g transform="translate(932 174)">
+      <rect width="142" height="104" rx="14" fill="#dcfce7" stroke="#86efac"/>
+      <path d="M55 32h32M61 24l-8 8 8 8M81 24l8 8-8 8" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="71" y="67" font-size="15" font-weight="700" fill="#0f172a">FastAPI</text>
+      <text x="71" y="87" font-size="12" fill="#475569">Batch inference</text>
+    </g>
+    <g transform="translate(1098 174)">
+      <rect width="142" height="104" rx="14" fill="#ccfbf1" stroke="#5eead4"/>
+      <ellipse cx="71" cy="24" rx="20" ry="8" fill="#0d9488"/>
+      <path d="M51 24v20c0 10 40 10 40 0V24M51 34c0 10 40 10 40 0" fill="none" stroke="#0d9488" stroke-width="3"/>
+      <text x="71" y="67" font-size="15" font-weight="700" fill="#0f172a">PostgreSQL</text>
+      <text x="71" y="87" font-size="12" fill="#475569">Follow-up workflow</text>
+    </g>
+    <g transform="translate(1264 174)">
+      <rect width="74" height="104" rx="14" fill="#e2e8f0" stroke="#94a3b8"/>
+      <rect x="20" y="19" width="34" height="25" rx="4" fill="#475569"/>
+      <text x="37" y="67" font-size="13" font-weight="700" fill="#0f172a">Docker</text>
+      <text x="37" y="84" font-size="13" font-weight="700" fill="#0f172a">Compose</text>
+    </g>
+  </g>
+
+  <g fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow)">
+    <path d="M204 226H222"/><path d="M370 226H388"/><path d="M552 226H570"/>
+    <path d="M742 226H760"/><path d="M908 226H926"/><path d="M1074 226H1092"/><path d="M1240 226H1258"/>
+  </g>
+
+  <rect x="38" y="371" width="1324" height="102" rx="20" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5" stroke-dasharray="8 6"/>
+  <text x="62" y="404" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2" fill="#9a3412">FUTURE ONLY · NOT DEPLOYED</text>
+  <path d="M503 438H626" fill="none" stroke="#b45309" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#future-arrow)"/>
+  <rect x="265" y="416" width="238" height="40" rx="10" fill="#ffffff" stroke="#fdba74"/>
+  <text x="384" y="441" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#7c2d12">Validated local Compose</text>
+  <rect x="627" y="416" width="502" height="40" rx="10" fill="#ffedd5" stroke="#fb923c"/>
+  <text x="878" y="441" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#7c2d12">AWS path: ECR · EC2 · EBS · CloudWatch</text>
+</svg>

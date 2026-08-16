@@ -69,19 +69,7 @@ as a possible future path only; no AWS resources have been created.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A["Synthetic pharmacy exports"] --> B["Validation and reconciliation"]
-    B --> C["PySide6 desktop workflow"]
-    D["Deterministic longitudinal generator"] --> E["Point-in-time feature builder"]
-    E --> F["Leakage-safe temporal modeling"]
-    F --> G["Locked Logistic Regression pipeline"]
-    G --> H["FastAPI inference"]
-    H --> I["PostgreSQL follow-up workflow"]
-    J["Local MLflow SQLite and artifacts"] --> G
-    K["Docker Compose"] --> H
-    K --> I
-```
+![Architecture of the validated local synthetic-data ML system, with AWS shown separately as future-only](docs/assets/system-architecture.svg)
 
 The API loads the sole `locked_final` MLflow pipeline. PostgreSQL stores operational Rx
 lookup and aggregate prediction/case metadata, not patient identity, feature vectors,
@@ -127,6 +115,8 @@ The locked model was evaluated once on 376 synthetic Test observations (218 posi
 | Accuracy | Precision | Recall | F1 | PR-AUC | ROC-AUC |
 |---:|---:|---:|---:|---:|---:|
 | 0.6383 | 0.6306 | 0.9083 | 0.7444 | 0.7352 | 0.6710 |
+
+![Synthetic Test Evaluation chart for the locked Logistic Regression model](docs/assets/synthetic-test-evaluation.svg)
 
 Confusion matrix: **TN 42, FP 116, FN 20, TP 198**.
 
