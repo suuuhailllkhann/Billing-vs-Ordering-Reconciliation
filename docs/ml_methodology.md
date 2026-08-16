@@ -835,3 +835,26 @@ Regression. The feature-order contract is also logged as safe JSON. No raw datas
 patient identifiers or names, DOBs, prescription/Rx identifiers, NDC-level patient
 records, or row-level predictions are logged. Local artifacts are reproducible and are
 excluded from Git. No Phase 2 decision changed as a result of tracking.
+
+## Phase 3B locked-model serving layer
+
+The local FastAPI service loads the single `locked_final` MLflow artifact from the
+repository-local SQLite backend at startup and rejects an absent or incompatible
+artifact. The artifact is not recreated: it retains the Train-fitted missing-value
+transformer and indicator, fixed full 16-feature order, `StandardScaler`, and locked
+Logistic Regression (`C=0.01`, L2/SAGA, `max_iter=5000`). The operating threshold
+remains 0.50.
+
+Requests supply the 15 raw feature fields. `refill_interval_std_available` is derived
+inside the fitted pipeline; `rx_number`, `fill_date`, and
+`current_refills_remaining` are lookup/date/business-rule inputs and never enter the
+model matrix. Expected supply end and operational eligibility are calculated by the
+serving layer using an injectable `America/New_York` server date. No preprocessing is
+fitted and no model training, tuning, feature selection, threshold selection, or Test
+evaluation occurs during serving.
+
+The service exposes local `/health`, `/predict`, and `/predict/batch` endpoints. Batch
+requests are capped at 500 and isolate row-level validation failures. Logging is
+aggregate-only and excludes raw requests, patient/Rx identifiers, feature values, and
+row-level predictions. The API does not persist manual resolutions or inference data
+and is not presented as production deployment infrastructure.

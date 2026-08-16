@@ -32,6 +32,13 @@ Runtime dependencies are intentionally limited to pandas, openpyxl, and PySide6.
 openpyxl supports `.xlsx` input. PySide6 is retained for compatibility with the
 existing desktop application; reconciliation and analytics modules do not import it.
 
+The optional local inference service requires FastAPI, Pydantic, Uvicorn, and the
+locked model's ML dependencies:
+
+```powershell
+python -m pip install -e ".[api,ml]"
+```
+
 ## Raw export ingestion
 
 The Phase 1B backend accepts `.csv` and `.xlsx` files through
@@ -208,6 +215,37 @@ Open `http://127.0.0.1:5000` after starting the UI. Run metadata is stored in th
 Git-ignored local `mlflow.db`; model artifacts are stored under the ignored
 `mlflow_artifacts/` directory. The legacy ignored `mlruns/` directory is not migrated or
 modified. Running tracking does not rerun tuning or change locked decisions.
+
+### Local inference API
+
+The Phase 3B FastAPI service loads the sole `locked_final` pipeline from the local
+MLflow SQLite store. Start it from the repository root after generating the established
+MLflow history:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn pharmacy_reconciliation.api.app:app --reload
+```
+
+The local endpoints are `GET /health`, `POST /predict`, and `POST /predict/batch`;
+interactive Swagger documentation is available at `http://127.0.0.1:8000/docs`.
+Batch requests accept 1–500 records, return every submitted record, and isolate invalid
+rows instead of rejecting otherwise valid rows.
+
+Callers provide the 15 raw model inputs plus `rx_number`, `fill_date`, and
+`current_refills_remaining`. The API derives expected supply end, days remaining, and
+the missing-history indicator internally. Model inference occurs only when there are
+zero refills and supply ends in 10 days through 7 days overdue. Priority is low at
+10–8 days, medium at 7–5, high at 4–1, urgent at 0, and `urgent_overdue` at 1–7 days
+overdue. More than 10 days remains `not_in_prediction_window`; more than 7 days overdue
+is `manual_review`. Future manual-resolution reasons are `new_prescription_received`,
+`medication_discontinued`, `dose_changed`, `medication_changed`,
+`patient_changed_pharmacy`, `patient_unreachable`, `prescriber_no_response`, and
+`other`; a future workflow must require a note for `other`.
+
+The server clock uses `America/New_York`. Logs contain aggregate request outcomes only:
+raw payloads, Rx/patient identifiers, feature values, and row-level predictions are not
+logged or sent to MLflow. This is a local development service, not a production
+deployment; no PostgreSQL, Docker, AWS, or remote serving infrastructure is included.
 
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
