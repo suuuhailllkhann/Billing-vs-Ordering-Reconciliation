@@ -888,3 +888,38 @@ credentials, and row-level MLflow data are excluded from storage and ordinary lo
 Persistence does not alter the locked Train-fitted preprocessing, full 16-feature model,
 Logistic Regression configuration, 0.50 threshold, eligibility, priority, or prediction
 semantics.
+
+## Phase 3D-A FastAPI container boundary
+
+Only the FastAPI process is containerized. The image uses Python 3.12, installs the
+locked `api` and `ml` dependency groups with `uv`, and runs Uvicorn on
+`0.0.0.0:8000`. PostgreSQL remains on the Windows host and is reached through a
+runtime `DATABASE_URL` using `host.docker.internal`; migrations are not run by the
+container. The slim Debian runtime includes `libgomp1` because importing the installed
+LightGBM dependency requires `libgomp.so.1`, even though the locked serving model is
+Logistic Regression. No Python imports or model behavior were restructured for this
+runtime requirement.
+
+The ignored MLflow SQLite database and artifact directory remain host-owned and are
+mounted read-only under `/app/runtime`. `MLFLOW_TRACKING_URI` points at the mounted
+database and `MLFLOW_ARTIFACT_ROOT` maps the existing artifact hierarchy. The loader
+still requires exactly one `locked_final` run, loads that run's `locked_pipeline`, and
+performs the existing configuration and feature-contract validation. Local execution
+retains `sqlite:///mlflow.db` and the original MLflow artifact resolution when these
+container variables are absent.
+
+The build context excludes `.env`, credentials, local databases/artifacts, datasets,
+caches, tests, desktop files, and generated outputs. No model is copied, regenerated,
+retrained, or re-logged. Containerization changes deployment packaging only; inference,
+PostgreSQL persistence, follow-up workflow, model selection, and Test-set decisions are
+unchanged.
+
+Manual Phase 3D-A validation subsequently confirmed that the image built and started,
+the locked-final artifact loaded from the read-only mounts, and the API connected to
+Windows-host PostgreSQL. Using one clearly synthetic Rx, `/health` succeeded and the
+existing workflow completed an eligible prediction, prediction/case persistence,
+activity creation, explicit resolution, and retrieval of the resolved case. This is a
+local integration verification only; it is not evidence about real patients, pharmacy
+operations, model quality, production security, availability, or scale. Docker Compose
+and multi-container orchestration are intentionally deferred to Phase 3D-B; AWS remains
+out of scope.

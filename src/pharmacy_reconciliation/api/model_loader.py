@@ -1,5 +1,7 @@
 """Load and validate the locked model from local MLflow SQLite tracking."""
 
+import os
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -11,8 +13,28 @@ from pharmacy_reconciliation.research.final_evaluation import LOCKED_THRESHOLD
 from pharmacy_reconciliation.research.mlflow_tracking import FINAL_EXPERIMENT
 from pharmacy_reconciliation.research.preparation import MODEL_FEATURE_COLUMNS
 
-TRACKING_URI = "sqlite:///mlflow.db"
+DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
+TRACKING_URI_ENVIRONMENT_VARIABLE = "MLFLOW_TRACKING_URI"
+ARTIFACT_ROOT_ENVIRONMENT_VARIABLE = "MLFLOW_ARTIFACT_ROOT"
 LOCKED_MODEL_NAME = "locked_pipeline"
+
+
+def resolve_tracking_uri(explicit_uri: str | None = None) -> str:
+    return explicit_uri or os.getenv(
+        TRACKING_URI_ENVIRONMENT_VARIABLE, DEFAULT_TRACKING_URI
+    )
+
+
+def resolve_model_source(model_id: str, model_uri: str) -> str:
+    artifact_root = os.getenv(ARTIFACT_ROOT_ENVIRONMENT_VARIABLE)
+    if not artifact_root:
+        return model_uri
+    model_source = (
+        Path(artifact_root) / FINAL_EXPERIMENT / "models" / model_id / "artifacts"
+    )
+    if not model_source.is_dir():
+        raise RuntimeError("Mounted locked-final model artifact was not found.")
+    return str(model_source)
 
 
 def _contract_row() -> pd.DataFrame:
@@ -43,8 +65,9 @@ def validate_locked_model(model: Any) -> None:
         raise RuntimeError("Locked model configuration is incompatible.")
 
 
-def load_locked_model(tracking_uri: str = TRACKING_URI) -> Any:
+def load_locked_model(tracking_uri: str | None = None) -> Any:
     """Discover the sole locked-final MLflow run and load its pipeline artifact."""
+    tracking_uri = resolve_tracking_uri(tracking_uri)
     mlflow.set_tracking_uri(tracking_uri)
     client = mlflow.MlflowClient()
     experiment = client.get_experiment_by_name(FINAL_EXPERIMENT)
@@ -61,7 +84,8 @@ def load_locked_model(tracking_uri: str = TRACKING_URI) -> Any:
     ]
     if len(models) != 1:
         raise RuntimeError("Locked-final model artifact was not found.")
-    model = mlflow_sklearn.load_model(models[0].model_uri)
+    model_source = resolve_model_source(models[0].model_id, models[0].model_uri)
+    model = mlflow_sklearn.load_model(model_source)
     if model is None:
         raise RuntimeError("Locked-final model artifact could not be loaded.")
     validate_locked_model(model)

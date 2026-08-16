@@ -288,7 +288,67 @@ Persistence stores Rx lookup numbers and aggregate prediction/case metadata only
 does not store patient identity, DOB, address, NDC, raw payloads, model feature vectors,
 or row-level MLflow inference data. PostgreSQL changes operational recordkeeping only;
 the locked model, preprocessing, 16-feature contract, threshold, and inference rules are
-unchanged. This remains local development infrastructure; Docker and AWS are not used.
+unchanged. AWS is not used.
+
+### FastAPI Docker image
+
+Phase 3D-A containerizes only FastAPI. PostgreSQL, `mlflow.db`, and
+`mlflow_artifacts/` remain on the Windows host. The image uses Python 3.12 slim and the
+committed `uv.lock`; it neither contains credentials nor copies MLflow state. Alembic is
+not run automatically. The slim Linux image installs `libgomp1`, which supplies the GNU
+OpenMP runtime required when the application dependency graph imports LightGBM.
+
+Build from PowerShell in the repository root:
+
+```powershell
+docker build -t pharmacy-reconciliation-api .
+```
+
+Capture the database password without placing it directly in shell history, construct a
+container-only URL using `host.docker.internal`, and start the API:
+
+```powershell
+$securePassword = Read-Host "pharmacy_app PostgreSQL password" -AsSecureString
+$credential = [System.Management.Automation.PSCredential]::new("pharmacy_app", $securePassword)
+$encodedPassword = [Uri]::EscapeDataString($credential.GetNetworkCredential().Password)
+$env:CONTAINER_DATABASE_URL = "postgresql+psycopg://pharmacy_app:${encodedPassword}@host.docker.internal:5432/pharmacy_reconciliation"
+
+docker run --rm --name pharmacy-reconciliation-api `
+  -p 8000:8000 `
+  -e DATABASE_URL="$env:CONTAINER_DATABASE_URL" `
+  -e MLFLOW_TRACKING_URI="sqlite:////app/runtime/mlflow.db" `
+  -e MLFLOW_ARTIFACT_ROOT="/app/runtime/mlflow_artifacts" `
+  --mount "type=bind,source=$((Resolve-Path .\mlflow.db).Path),target=/app/runtime/mlflow.db,readonly" `
+  --mount "type=bind,source=$((Resolve-Path .\mlflow_artifacts).Path),target=/app/runtime/mlflow_artifacts,readonly" `
+  pharmacy-reconciliation-api
+```
+
+After the container stops, clear the temporary values:
+
+```powershell
+Remove-Variable securePassword, credential, encodedPassword
+Remove-Item Env:CONTAINER_DATABASE_URL
+```
+
+Manual checks:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Start-Process http://localhost:8000/docs
+```
+
+The container listens on `0.0.0.0:8000`. `MLFLOW_TRACKING_URI` identifies the mounted
+SQLite backend, while `MLFLOW_ARTIFACT_ROOT` maps the existing locked artifact without
+changing its run, contents, or selection rules.
+
+Phase 3D-A was manually validated with the built
+`pharmacy-reconciliation-api:latest` image and synthetic-only input. The container
+started, loaded the existing locked-final model, reached Windows-host PostgreSQL through
+`host.docker.internal`, returned a healthy `/health` response, produced an eligible
+prediction, persisted an open follow-up case, accepted an activity, explicitly resolved
+the case, and returned the resolved state with a resolution timestamp. This confirms the
+local Docker integration path; it does not establish production readiness or real-world
+pharmacy/model performance. Docker Compose is intentionally deferred to Phase 3D-B.
 
 `data/synthetic` contains a small, manually calculable fictional dataset. It covers
 matched, short, extra, billing-only, order-only, multi-insurer, multi-patient,
