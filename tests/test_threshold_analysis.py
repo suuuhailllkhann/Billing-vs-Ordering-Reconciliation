@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -8,8 +6,6 @@ from pharmacy_reconciliation.research.threshold_analysis import (
     analyze_validation_thresholds,
     tuned_full_feature_pipelines,
 )
-
-OBSERVATIONS_PATH = Path("data/synthetic/longitudinal/refill_observations.csv")
 
 
 def test_exact_threshold_grid_and_full_feature_models() -> None:
@@ -22,8 +18,10 @@ def test_exact_threshold_grid_and_full_feature_models() -> None:
     )
 
 
-def test_threshold_counts_and_test_isolation_are_deterministic() -> None:
-    observations = pd.read_csv(OBSERVATIONS_PATH)
+def test_threshold_counts_and_test_isolation_are_deterministic(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
+    observations = longitudinal_observations
     first = analyze_validation_thresholds(observations)
     second = analyze_validation_thresholds(observations)
     for left, right in zip(first, second, strict=True):

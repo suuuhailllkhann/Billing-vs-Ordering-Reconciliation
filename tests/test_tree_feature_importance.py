@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -11,11 +9,11 @@ from pharmacy_reconciliation.research.tree_feature_importance import (
     tuned_tree_pipelines,
 )
 
-OBSERVATIONS_PATH = Path("data/synthetic/longitudinal/refill_observations.csv")
 
-
-def test_tree_importances_cover_and_rank_every_final_input() -> None:
-    observations = pd.read_csv(OBSERVATIONS_PATH)
+def test_tree_importances_cover_and_rank_every_final_input(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
+    observations = longitudinal_observations
     results = fit_tuned_tree_importances(observations)
 
     assert tuple(results) == TREE_MODEL_NAMES
@@ -34,13 +32,15 @@ def test_tree_importances_cover_and_rank_every_final_input() -> None:
     ]
 
 
-def test_tuned_tree_configuration_and_test_period_isolation() -> None:
+def test_tuned_tree_configuration_and_test_period_isolation(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
     pipelines = tuned_tree_pipelines()
     assert pipelines["Random Forest"].named_steps["classifier"].n_estimators == 200
     assert pipelines["XGBoost"].named_steps["classifier"].reg_lambda == 10
     assert pipelines["LightGBM"].named_steps["classifier"].num_leaves == 7
 
-    observations = pd.read_csv(OBSERVATIONS_PATH)
+    observations = longitudinal_observations
     changed_test = observations.copy()
     test_mask = pd.to_datetime(changed_test["observation_date"]) >= "2026-04-01"
     changed_test.loc[test_mask, "previous_on_time_fill_rate"] = 999.0

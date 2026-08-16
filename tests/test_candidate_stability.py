@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 from pandas.testing import assert_frame_equal
 from sklearn.model_selection import TimeSeriesSplit
@@ -15,10 +13,10 @@ from pharmacy_reconciliation.research.candidate_stability import (
 )
 from pharmacy_reconciliation.research.preparation import MODEL_FEATURE_COLUMNS
 
-OBSERVATIONS_PATH = Path("data/synthetic/longitudinal/refill_observations.csv")
 
-
-def test_fixed_candidates_and_five_chronological_folds() -> None:
+def test_fixed_candidates_and_five_chronological_folds(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
     pipelines = fixed_candidate_pipelines()
     assert tuple(pipelines) == CANDIDATE_NAMES
     assert pipelines["Logistic Regression"].named_steps["classifier"].C == 0.01
@@ -28,7 +26,7 @@ def test_fixed_candidates_and_five_chronological_folds() -> None:
     assert splitter.shuffle is False
     assert splitter.random_state is None
 
-    raw = pd.read_csv(OBSERVATIONS_PATH)
+    raw = longitudinal_observations
     train = raw.loc[pd.to_datetime(raw["observation_date"]) < "2026-02-01"]
     transformed = pipelines["Logistic Regression"].named_steps["preprocessor"].fit_transform(
         train
@@ -36,8 +34,10 @@ def test_fixed_candidates_and_five_chronological_folds() -> None:
     assert tuple(transformed.columns) == MODEL_FEATURE_COLUMNS
 
 
-def test_stability_and_validation_are_deterministic_and_test_isolated() -> None:
-    observations = pd.read_csv(OBSERVATIONS_PATH)
+def test_stability_and_validation_are_deterministic_and_test_isolated(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
+    observations = longitudinal_observations
     stability = analyze_train_cv_stability(observations)
     assert all(len(result.folds) == 5 for result in stability)
     assert all((result.folds["train_observations"] < 1714).all() for result in stability)

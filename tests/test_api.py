@@ -9,11 +9,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pharmacy_reconciliation.api.app import NEW_YORK, create_app, current_new_york_date
-from pharmacy_reconciliation.api.model_loader import load_locked_model
 from pharmacy_reconciliation.api.schemas import PredictionRequest
-from pharmacy_reconciliation.research.features import FEATURE_COLUMNS
+from pharmacy_reconciliation.research.feature_analysis import tuned_logistic_pipeline
+from pharmacy_reconciliation.research.features import FEATURE_COLUMNS, TARGET_COLUMN
 from pharmacy_reconciliation.research.final_evaluation import LOCKED_THRESHOLD
-from pharmacy_reconciliation.research.preparation import MODEL_FEATURE_COLUMNS
+from pharmacy_reconciliation.research.preparation import (
+    MODEL_FEATURE_COLUMNS,
+    chronological_split,
+)
 
 TODAY = date(2026, 8, 15)
 
@@ -61,8 +64,12 @@ def _client(model: Any) -> TestClient:
     return TestClient(application)
 
 
-def test_health_is_minimal_and_locked_model_loads() -> None:
-    model = load_locked_model()
+def test_health_is_minimal_and_locked_model_contract_is_accepted(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
+    train = chronological_split(longitudinal_observations).train
+    model = tuned_logistic_pipeline()
+    model.fit(train.loc[:, FEATURE_COLUMNS], train[TARGET_COLUMN].astype("int8"))
     assert tuple(model.named_steps) == ("preprocessor", "scaler", "classifier")
     transformed = model.named_steps["preprocessor"].transform(
         pd.DataFrame([{column: 0.0 for column in FEATURE_COLUMNS}])

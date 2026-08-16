@@ -11,17 +11,17 @@ from pharmacy_reconciliation.research.mlflow_tracking import (
     log_modeling_history,
 )
 
-OBSERVATIONS = Path("data/synthetic/longitudinal/refill_observations.csv")
 
-
-def test_local_history_logs_nine_safe_deterministic_runs() -> None:
+def test_local_history_logs_nine_safe_deterministic_runs(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
     Path("tmp").mkdir(exist_ok=True)
     with TemporaryDirectory(dir="tmp") as directory:
         database = Path(directory) / "mlflow.db"
         artifacts = Path(directory) / "artifacts"
         tracking_uri = f"sqlite:///{database.resolve().as_posix()}"
         ids = log_modeling_history(
-            pd.read_csv(OBSERVATIONS),
+            longitudinal_observations,
             tracking_uri=tracking_uri,
             artifact_directory=artifacts,
             log_final_artifact=False,

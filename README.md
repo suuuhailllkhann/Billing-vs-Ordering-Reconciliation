@@ -12,7 +12,7 @@ Python 3.11 through 3.13 is supported. From an isolated environment, install the
 package and development dependencies with:
 
 ```text
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,api,ml]"
 ```
 
 Run the automated tests with:
@@ -20,6 +20,11 @@ Run the automated tests with:
 ```text
 python -m pytest
 ```
+
+The test suite generates its deterministic longitudinal ML observations in memory; it
+does not require ignored files under `data/synthetic/longitudinal/` or local MLflow
+state. The larger CSV artifacts remain optional and can be regenerated separately for
+research scripts.
 
 Run the lightweight code-quality checks with:
 

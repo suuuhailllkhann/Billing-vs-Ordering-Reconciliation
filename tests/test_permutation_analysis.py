@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
@@ -12,10 +10,10 @@ from pharmacy_reconciliation.research.permutation_analysis import (
 )
 from pharmacy_reconciliation.research.preparation import MODEL_FEATURE_COLUMNS
 
-OBSERVATIONS = Path("data/synthetic/longitudinal/refill_observations.csv")
 
-
-def test_permutation_contract_and_locked_model() -> None:
+def test_permutation_contract_and_locked_model(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
     assert PERMUTATION_SCORING == "average_precision"
     assert PERMUTATION_REPEATS == 30
     assert PERMUTATION_RANDOM_STATE == 20260814
@@ -24,14 +22,16 @@ def test_permutation_contract_and_locked_model() -> None:
     assert classifier.solver == "saga"
     assert classifier.max_iter == 5000
 
-    result = locked_logistic_permutation_importance(pd.read_csv(OBSERVATIONS))
+    result = locked_logistic_permutation_importance(longitudinal_observations)
     assert result.validation_observations == 384
     assert set(result.importances["feature"]) == set(MODEL_FEATURE_COLUMNS)
     assert result.importances["rank"].tolist() == list(range(1, 17))
 
 
-def test_permutation_results_are_deterministic_and_test_isolated() -> None:
-    observations = pd.read_csv(OBSERVATIONS)
+def test_permutation_results_are_deterministic_and_test_isolated(
+    longitudinal_observations: pd.DataFrame,
+) -> None:
+    observations = longitudinal_observations
     first = locked_logistic_permutation_importance(observations)
     changed = observations.copy()
     test_mask = pd.to_datetime(changed["observation_date"]) >= "2026-04-01"
